@@ -42,6 +42,7 @@ public final class MainActivity extends Activity {
     private PresetRepository presets;
     private Preset editingPreset;
     private PresetSettingsView settingsView;
+    private VehiclePreviewView vehiclePreview;
     private int restoredSettingsTab;
     private String restoredSettingsDetail;
     private String currentScreen = "home";
@@ -67,6 +68,7 @@ public final class MainActivity extends Activity {
             String restoredScreen = savedInstanceState.getString("current_screen", "home");
             if ("presets".equals(restoredScreen)) currentScreen = "presets";
             if ("notifications".equals(restoredScreen)) currentScreen = "notifications";
+            if ("simulation".equals(restoredScreen)) currentScreen = "simulation";
             if ("settings".equals(restoredScreen)) {
                 String editId = savedInstanceState.getString("editing_id");
                 for (Preset preset : presets.getPresets()) {
@@ -113,6 +115,10 @@ public final class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if ("simulation".equals(currentScreen)) {
+            navigateTo("home");
+            return;
+        }
         if ("notifications".equals(currentScreen)) {
             currentScreen = "home";
             render();
@@ -137,6 +143,16 @@ public final class MainActivity extends Activity {
     }
 
     private void render() {
+        if ("simulation".equals(currentScreen)) {
+            vehiclePreview = new VehiclePreviewView(this, scale,
+                    new TemporaryReveal(presets.getSelected()), () -> navigateTo("home"));
+            setContentView(vehiclePreview.getView());
+            return;
+        }
+        if (vehiclePreview != null) {
+            vehiclePreview.cancelHold();
+            vehiclePreview = null;
+        }
         LinearLayout root = row();
         root.setBackgroundColor(BACKGROUND);
         int sidebarWidth = Math.max(dp(150), Math.round(getResources().getDisplayMetrics().widthPixels * 0.18f));
@@ -269,6 +285,18 @@ public final class MainActivity extends Activity {
                 .setPositiveButton("버리기", (dialog, which) -> onDiscard.run()).show();
     }
 
+    @Override
+    protected void onPause() {
+        if (vehiclePreview != null) vehiclePreview.cancelHold();
+        super.onPause();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (!hasFocus && vehiclePreview != null) vehiclePreview.cancelHold();
+    }
+
     private LinearLayout homeContent(boolean compact) {
         LinearLayout container = column();
         int padding = dp(compact ? 30 : 42);
@@ -279,6 +307,10 @@ public final class MainActivity extends Activity {
         TextView title = label("프라이버시 보호", compact ? 34 : 43, TEXT, true);
         header.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
         if (!compact) {
+            TextView simulation = action("차량 화면 시뮬레이션", 16);
+            simulation.setContentDescription("차량 기본 화면 시뮬레이션 열기");
+            simulation.setOnClickListener(v -> navigateTo("simulation"));
+            header.addView(simulation);
             LinearLayout notification = row();
             notification.setGravity(Gravity.CENTER_VERTICAL);
             notification.addView(icon(R.drawable.ic_bell), new LinearLayout.LayoutParams(dp(30), dp(30)));
