@@ -1,0 +1,8 @@
+<resources>
+    <item name="protection_switch" type="id" />
+    <item name="request_status" type="id" />
+    <item name="preset_name" type="id" />
+    <item name="status_details" type="id" />
+    <item name="close_details" type="id" />
+    <item name="details_panel" type="id" />
+</resources>
