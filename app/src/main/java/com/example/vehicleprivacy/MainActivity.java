@@ -1,6 +1,7 @@
 package com.example.vehicleprivacy;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
@@ -14,7 +15,12 @@ import android.widget.ScrollView;
 import android.widget.Space;
 import android.widget.Switch;
 import android.widget.TextView;
+import android.widget.Toast;
 
+import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /** The first UI slice only records a request. It does not control vehicle systems. */
 public final class MainActivity extends Activity {
@@ -32,6 +38,12 @@ public final class MainActivity extends Activity {
 
     private SharedPreferences preferences;
     private ProtectionController controller;
+    private PresetRepository presets;
+    private Preset editingPreset;
+    private PresetSettingsView settingsView;
+    private int restoredSettingsTab;
+    private String restoredSettingsDetail;
+    private String currentScreen = "home";
     private boolean detailsOpen;
     private float scale;
 
@@ -39,6 +51,7 @@ public final class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         preferences = getSharedPreferences(PREFS, MODE_PRIVATE);
+        presets = new PresetRepository(new SharedPreferencesPresetStorage(preferences));
         String storedPreset = preferences.getString(PRESET_KEY, DEFAULT_PRESET);
         if (storedPreset == null || storedPreset.trim().isEmpty()) {
             storedPreset = DEFAULT_PRESET;
@@ -46,6 +59,28 @@ public final class MainActivity extends Activity {
         controller = new ProtectionController(preferences.getBoolean(REQUEST_KEY, false), storedPreset);
         detailsOpen = savedInstanceState != null && savedInstanceState.getBoolean("details_open", false)
                 && controller.isRequested();
+        if (savedInstanceState != null) {
+            String restoredScreen = savedInstanceState.getString("current_screen", "home");
+            if ("presets".equals(restoredScreen)) currentScreen = "presets";
+            if ("settings".equals(restoredScreen)) {
+                String editId = savedInstanceState.getString("editing_id");
+                for (Preset preset : presets.getPresets()) {
+                    if (preset.getId().equals(editId)) {
+                        editingPreset = preset;
+                        Bundle draft = savedInstanceState.getBundle("editing_values");
+                        if (draft != null) {
+                            Map<String, String> values = new HashMap<>();
+                            for (String key : draft.keySet()) values.put(key, draft.getString(key));
+                            editingPreset.replaceValues(values);
+                        }
+                        currentScreen = "settings";
+                        restoredSettingsTab = savedInstanceState.getInt("settings_tab", 0);
+                        restoredSettingsDetail = savedInstanceState.getString("settings_detail");
+                        break;
+                    }
+                }
+            }
+        }
         float heightDp = getResources().getDisplayMetrics().heightPixels
                 / getResources().getDisplayMetrics().density;
         scale = Math.max(0.70f, Math.min(1.45f, heightDp / 1000f));
@@ -55,11 +90,34 @@ public final class MainActivity extends Activity {
     @Override
     protected void onSaveInstanceState(Bundle state) {
         state.putBoolean("details_open", detailsOpen);
+        state.putString("current_screen", currentScreen);
+        if ("settings".equals(currentScreen) && editingPreset != null) {
+            state.putString("editing_id", editingPreset.getId());
+            Bundle draft = new Bundle();
+            for (Map.Entry<String, String> entry : editingPreset.getValues().entrySet()) {
+                draft.putString(entry.getKey(), entry.getValue());
+            }
+            state.putBundle("editing_values", draft);
+            if (settingsView != null) {
+                state.putInt("settings_tab", settingsView.getTab());
+                state.putString("settings_detail", settingsView.getDetail());
+            }
+        }
         super.onSaveInstanceState(state);
     }
 
     @Override
     public void onBackPressed() {
+        if ("settings".equals(currentScreen)) {
+            if (settingsView != null && settingsView.handleBack()) return;
+            confirmDiscard(() -> { currentScreen = "presets"; render(); });
+            return;
+        }
+        if ("presets".equals(currentScreen)) {
+            currentScreen = "home";
+            render();
+            return;
+        }
         if (detailsOpen) {
             detailsOpen = false;
             render();
@@ -75,7 +133,17 @@ public final class MainActivity extends Activity {
         root.addView(sidebar(), new LinearLayout.LayoutParams(sidebarWidth, -1));
         root.addView(divider(true), new LinearLayout.LayoutParams(dp(1), -1));
 
-        if (detailsOpen) {
+        if ("presets".equals(currentScreen)) {
+            root.addView(presetList(), new LinearLayout.LayoutParams(0, -1, 1f));
+        } else if ("settings".equals(currentScreen)) {
+            settingsView = new PresetSettingsView(this, scale, editingPreset,
+                    () -> { presets.save(editingPreset); currentScreen = "presets"; render(); },
+                    () -> { currentScreen = "presets"; render(); });
+            settingsView.restoreLocation(restoredSettingsTab, restoredSettingsDetail);
+            restoredSettingsTab = 0;
+            restoredSettingsDetail = null;
+            root.addView(settingsView.getView(), new LinearLayout.LayoutParams(0, -1, 1f));
+        } else if (detailsOpen) {
             LinearLayout summary = homeContent(true);
             root.addView(summary, new LinearLayout.LayoutParams(0, -1, 1f));
             root.addView(divider(true), new LinearLayout.LayoutParams(dp(1), -1));
@@ -90,28 +158,100 @@ public final class MainActivity extends Activity {
         LinearLayout side = column();
         side.setBackgroundColor(SIDEBAR);
         side.addView(space(dp(90)));
+
         LinearLayout home = row();
         home.setGravity(Gravity.CENTER_VERTICAL);
-        home.setBackgroundColor(SELECTED);
-        home.addView(colorBar(), new LinearLayout.LayoutParams(dp(7), -1));
+        boolean onHome = "home".equals(currentScreen);
+        if (onHome) home.setBackgroundColor(SELECTED);
+        home.addView(onHome ? colorBar() : gap(dp(7)), new LinearLayout.LayoutParams(dp(7), -1));
         home.addView(gap(dp(24)));
         home.addView(icon(R.drawable.ic_home), new LinearLayout.LayoutParams(dp(30), dp(30)));
         home.addView(gap(dp(20)));
-        home.addView(label("홈", 27, ACCENT, true));
-        home.setContentDescription("홈, 선택됨");
+        home.addView(label("홈", 27, onHome ? ACCENT : MUTED, true));
+        home.setContentDescription(onHome ? "홈, 선택됨" : "홈");
+        home.setOnClickListener(v -> navigateTo("home"));
+        home.setFocusable(true);
         side.addView(home, new LinearLayout.LayoutParams(-1, dp(78)));
+
         LinearLayout presets = row();
         presets.setGravity(Gravity.CENTER_VERTICAL);
-        presets.setPadding(dp(31), 0, dp(10), 0);
+        boolean onPresets = !onHome;
+        if (onPresets) presets.setBackgroundColor(SELECTED);
+        presets.addView(onPresets ? colorBar() : gap(dp(7)), new LinearLayout.LayoutParams(dp(7), -1));
+        presets.addView(gap(dp(24)));
         presets.addView(icon(R.drawable.ic_tune), new LinearLayout.LayoutParams(dp(30), dp(30)));
         presets.addView(gap(dp(20)));
         LinearLayout presetLabel = column();
-        presetLabel.addView(label("프리셋", 24, MUTED, true));
-        presetLabel.addView(label("준비 중", 14, MUTED, false));
+        presetLabel.addView(label("프리셋", 24, onPresets ? ACCENT : MUTED, true));
         presets.addView(presetLabel);
-        presets.setContentDescription("프리셋 메뉴, 준비 중");
+        presets.setContentDescription(onPresets ? "프리셋, 선택됨" : "프리셋");
+        presets.setOnClickListener(v -> navigateTo("presets"));
+        presets.setFocusable(true);
         side.addView(presets, new LinearLayout.LayoutParams(-1, dp(86)));
         return side;
+    }
+
+    private View presetList() {
+        return new PresetListView(this, scale, presets.getPresets(), presets.getSelectedId(),
+                new PresetListView.Listener() {
+                    @Override public void onSelect(String id) {
+                        updatePresets(() -> presets.select(id));
+                    }
+                    @Override public void onSettings(String id) {
+                        for (Preset preset : presets.getPresets()) {
+                            if (preset.getId().equals(id)) {
+                                editingPreset = preset;
+                                currentScreen = "settings";
+                                render();
+                                return;
+                            }
+                        }
+                    }
+                    @Override public void onAdd(String name) {
+                        updatePresets(() -> presets.add(name));
+                    }
+                    @Override public void onRename(String id, String name) {
+                        updatePresets(() -> presets.rename(id, name));
+                    }
+                    @Override public void onMove(String id, int index) {
+                        updatePresets(() -> presets.move(id, index));
+                    }
+                    @Override public void onDelete(String id) {
+                        updatePresets(() -> presets.delete(id));
+                    }
+                }).getView();
+    }
+
+    private void updatePresets(Runnable operation) {
+        try {
+            operation.run();
+            render();
+        } catch (IllegalArgumentException | IllegalStateException error) {
+            Toast.makeText(this, error.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void navigateTo(String target) {
+        if (target.equals(currentScreen)) return;
+        Runnable change = () -> { currentScreen = target; detailsOpen = false; render(); };
+        if ("settings".equals(currentScreen) && hasUnsavedPresetChanges()) confirmDiscard(change);
+        else change.run();
+    }
+
+    private boolean hasUnsavedPresetChanges() {
+        if (editingPreset == null) return false;
+        for (Preset saved : presets.getPresets()) {
+            if (saved.getId().equals(editingPreset.getId())) {
+                return !saved.getValues().equals(editingPreset.getValues());
+            }
+        }
+        return true;
+    }
+
+    private void confirmDiscard(Runnable onDiscard) {
+        new AlertDialog.Builder(this).setMessage("저장하지 않은 설정을 버릴까요?")
+                .setNegativeButton("계속 편집", null)
+                .setPositiveButton("버리기", (dialog, which) -> onDiscard.run()).show();
     }
 
     private LinearLayout homeContent(boolean compact) {
@@ -183,7 +323,7 @@ public final class MainActivity extends Activity {
         preset.setGravity(Gravity.CENTER_VERTICAL);
         preset.addView(label("✓", 32, ACCENT, true));
         preset.addView(gap(dp(15)));
-        TextView presetName = label(controller.getPresetName(), 33, TEXT, true);
+        TextView presetName = label(presets.getSelected().getName(), 33, TEXT, true);
         presetName.setId(R.id.preset_name);
         preset.addView(presetName);
         body.addView(preset);
@@ -218,7 +358,7 @@ public final class MainActivity extends Activity {
         body.addView(space(dp(28)));
         body.addView(label("선택한 프리셋", 20, MUTED, false));
         body.addView(space(dp(10)));
-        TextView preset = label("✓  " + controller.getPresetName(), 30, ACCENT, true);
+        TextView preset = label("✓  " + presets.getSelected().getName(), 30, ACCENT, true);
         preset.setId(R.id.preset_name);
         body.addView(preset);
         body.addView(space(dp(28)));
@@ -260,9 +400,11 @@ public final class MainActivity extends Activity {
         headings.addView(label("상태", 19, MUTED, false));
         table.addView(headings, new LinearLayout.LayoutParams(-1, dp(55)));
         table.addView(divider(false), new LinearLayout.LayoutParams(-1, dp(1)));
-        addStatusRow(table, "기본 화면");
-        addStatusRow(table, "알림 미리보기");
-        addStatusRow(table, "통화 음성");
+        List<String> targets = requestedTargets();
+        if (targets.isEmpty()) {
+            table.addView(label("선택한 보호 대상이 없습니다.", 21, MUTED, false));
+        }
+        for (String target : targets) addStatusRow(table, target);
         table.addView(space(dp(24)));
         table.addView(label("실제 보호 기능과 차량 시스템은 아직 연동되지 않았습니다.",
                 16, MUTED, false));
@@ -280,8 +422,20 @@ public final class MainActivity extends Activity {
         parent.addView(divider(false), new LinearLayout.LayoutParams(-1, dp(1)));
     }
 
+    private List<String> requestedTargets() {
+        Preset selected = presets.getSelected();
+        List<String> targets = new ArrayList<>();
+        if (selected.getBoolean("protect_screen", true)) targets.add("기본 화면");
+        if (selected.getBoolean("protect_contact", true)) targets.add("연락처");
+        if (selected.getBoolean("protect_notifications", true)) targets.add("알림 미리보기");
+        if (selected.getBoolean("audio_call", false)) targets.add("통화 배경 음성");
+        if (selected.getBoolean("audio_media", false)) targets.add("미디어 보호");
+        return targets;
+    }
+
     private String targetSummary() {
-        return "3개 대상 연동 전";
+        int count = requestedTargets().size();
+        return count == 0 ? "선택한 보호 대상 없음" : count + "개 대상 연동 전";
     }
 
     private Switch protectionSwitch() {
