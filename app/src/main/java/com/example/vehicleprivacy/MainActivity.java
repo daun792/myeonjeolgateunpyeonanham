@@ -47,6 +47,8 @@ public final class MainActivity extends Activity {
     private CarUxParkingVeto carUxParkingVeto;
     private HeldNotificationsView heldNotificationsView;
     private UtteranceCheckView utteranceCheckView;
+    private PrivacyRuleDraftView ruleDraftView;
+    private Preset ruleDraft;
     private int restoredSettingsTab;
     private String restoredSettingsDetail;
     private String currentScreen = "home";
@@ -89,6 +91,21 @@ public final class MainActivity extends Activity {
             if ("owned_preview".equals(restoredScreen)) currentScreen = "owned_preview";
             if ("audit".equals(restoredScreen)) currentScreen = "audit";
             if ("utterance_check".equals(restoredScreen)) currentScreen = "utterance_check";
+            if ("rule_draft".equals(restoredScreen)) {
+                String id = savedInstanceState.getString("rule_draft_id");
+                for (Preset preset : presets.getPresets()) {
+                    if (!preset.getId().equals(id)) continue;
+                    ruleDraft = preset;
+                    Bundle valuesBundle = savedInstanceState.getBundle("rule_draft_values");
+                    if (valuesBundle != null) {
+                        Map<String, String> values = new HashMap<>();
+                        for (String key : valuesBundle.keySet()) values.put(key, valuesBundle.getString(key));
+                        ruleDraft.replaceValues(values);
+                    }
+                    currentScreen = "rule_draft";
+                    break;
+                }
+            }
             if ("settings".equals(restoredScreen)) {
                 String editId = savedInstanceState.getString("editing_id");
                 for (Preset preset : presets.getPresets()) {
@@ -130,11 +147,23 @@ public final class MainActivity extends Activity {
                 state.putString("settings_detail", settingsView.getDetail());
             }
         }
+        if ("rule_draft".equals(currentScreen) && ruleDraft != null) {
+            state.putString("rule_draft_id", ruleDraft.getId());
+            Bundle values = new Bundle();
+            for (Map.Entry<String, String> entry : ruleDraft.getValues().entrySet()) {
+                values.putString(entry.getKey(), entry.getValue());
+            }
+            state.putBundle("rule_draft_values", values);
+        }
         super.onSaveInstanceState(state);
     }
 
     @Override
     public void onBackPressed() {
+        if ("rule_draft".equals(currentScreen)) {
+            leaveRuleDraft();
+            return;
+        }
         if ("utterance_check".equals(currentScreen)) {
             currentScreen = "home";
             render();
@@ -183,6 +212,10 @@ public final class MainActivity extends Activity {
     }
 
     private void render() {
+        if (ruleDraftView != null) {
+            ruleDraftView.clearSensitiveInput();
+            ruleDraftView = null;
+        }
         if (utteranceCheckView != null) {
             utteranceCheckView.clearSensitiveInput();
             utteranceCheckView = null;
@@ -209,6 +242,11 @@ public final class MainActivity extends Activity {
 
         if ("presets".equals(currentScreen)) {
             root.addView(presetList(), new LinearLayout.LayoutParams(0, -1, 1f));
+        } else if ("rule_draft".equals(currentScreen)) {
+            ruleDraftView = new PrivacyRuleDraftView(this, scale, ruleDraft,
+                    () -> { presets.save(ruleDraft); ruleDraft = null; currentScreen = "home"; render(); },
+                    this::leaveRuleDraft);
+            root.addView(ruleDraftView.getView(), new LinearLayout.LayoutParams(0, -1, 1f));
         } else if ("utterance_check".equals(currentScreen)) {
             utteranceCheckView = new UtteranceCheckView(this, scale, () -> navigateTo("home"));
             root.addView(utteranceCheckView.getView(), new LinearLayout.LayoutParams(0, -1, 1f));
@@ -262,7 +300,8 @@ public final class MainActivity extends Activity {
         home.setGravity(Gravity.CENTER_VERTICAL);
         boolean onHome = "home".equals(currentScreen) || "notifications".equals(currentScreen)
                 || "assessment".equals(currentScreen) || "owned_preview".equals(currentScreen)
-                || "audit".equals(currentScreen) || "utterance_check".equals(currentScreen);
+                || "audit".equals(currentScreen) || "utterance_check".equals(currentScreen)
+                || "rule_draft".equals(currentScreen);
         if (onHome) home.setBackgroundColor(SELECTED);
         home.addView(onHome ? colorBar() : gap(dp(7)), new LinearLayout.LayoutParams(dp(7), -1));
         home.addView(gap(dp(24)));
@@ -368,11 +407,28 @@ public final class MainActivity extends Activity {
         render();
     }
 
+    private void leaveRuleDraft() {
+        Runnable leave = () -> { ruleDraft = null; currentScreen = "home"; render(); };
+        if (hasUnsavedRuleChanges()) confirmDiscard(leave); else leave.run();
+    }
+
+    private boolean hasUnsavedRuleChanges() {
+        if (ruleDraft == null) return false;
+        for (Preset saved : presets.getPresets()) {
+            if (saved.getId().equals(ruleDraft.getId())) {
+                return !saved.getValues().equals(ruleDraft.getValues());
+            }
+        }
+        return true;
+    }
+
     private void navigateTo(String target) {
         if (target.equals(currentScreen)) return;
         Runnable change = () -> { currentScreen = target; detailsOpen = false; render(); };
         if ("settings".equals(currentScreen) && hasUnsavedPresetChanges()) confirmDiscard(change);
-        else change.run();
+        else if ("rule_draft".equals(currentScreen) && hasUnsavedRuleChanges()) {
+            confirmDiscard(() -> { ruleDraft = null; change.run(); });
+        } else change.run();
     }
 
     private boolean hasUnsavedPresetChanges() {
@@ -395,6 +451,7 @@ public final class MainActivity extends Activity {
     protected void onPause() {
         if (vehiclePreview != null) vehiclePreview.cancelHold();
         if (utteranceCheckView != null) utteranceCheckView.clearSensitiveInput();
+        if (ruleDraftView != null) ruleDraftView.clearSensitiveInput();
         if (carUxParkingVeto != null) {
             try { carUxParkingVeto.stop(); }
             catch (RuntimeException | LinkageError unavailable) { carUxParkingVeto = null; }
@@ -554,6 +611,13 @@ public final class MainActivity extends Activity {
         TextView utterance = action("발화 전 문장 점검  ›", 20);
         utterance.setOnClickListener(v -> navigateTo("utterance_check"));
         body.addView(utterance);
+        TextView rule = action("문장으로 설정 제안  ›", 20);
+        rule.setOnClickListener(v -> {
+            ruleDraft = presets.getSelected();
+            currentScreen = "rule_draft";
+            render();
+        });
+        body.addView(rule);
     }
 
     private void addCompactSummary(LinearLayout body) {
