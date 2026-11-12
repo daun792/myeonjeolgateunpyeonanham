@@ -75,6 +75,7 @@ public final class MainActivity extends Activity {
             if ("presets".equals(restoredScreen)) currentScreen = "presets";
             if ("notifications".equals(restoredScreen)) currentScreen = "notifications";
             if ("simulation".equals(restoredScreen)) currentScreen = "simulation";
+            if ("assessment".equals(restoredScreen)) currentScreen = "assessment";
             if ("settings".equals(restoredScreen)) {
                 String editId = savedInstanceState.getString("editing_id");
                 for (Preset preset : presets.getPresets()) {
@@ -121,6 +122,11 @@ public final class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if ("assessment".equals(currentScreen)) {
+            currentScreen = "home";
+            render();
+            return;
+        }
         if ("simulation".equals(currentScreen)) {
             navigateTo("home");
             return;
@@ -171,6 +177,12 @@ public final class MainActivity extends Activity {
 
         if ("presets".equals(currentScreen)) {
             root.addView(presetList(), new LinearLayout.LayoutParams(0, -1, 1f));
+        } else if ("assessment".equals(currentScreen)) {
+            root.addView(new PrivacyAssessmentView(this, scale, presets.getSelected(),
+                    () -> { currentScreen = "home"; render(); },
+                    () -> { editingPreset = presets.getSelected(); detailsOpen = false;
+                        currentScreen = "settings"; render(); }).getView(),
+                    new LinearLayout.LayoutParams(0, -1, 1f));
         } else if ("notifications".equals(currentScreen)) {
             heldNotificationsView = new HeldNotificationsView(this, scale,
                     testNotifications.getNotifications(), disclosureGate,
@@ -204,7 +216,8 @@ public final class MainActivity extends Activity {
 
         LinearLayout home = row();
         home.setGravity(Gravity.CENTER_VERTICAL);
-        boolean onHome = "home".equals(currentScreen) || "notifications".equals(currentScreen);
+        boolean onHome = "home".equals(currentScreen) || "notifications".equals(currentScreen)
+                || "assessment".equals(currentScreen);
         if (onHome) home.setBackgroundColor(SELECTED);
         home.addView(onHome ? colorBar() : gap(dp(7)), new LinearLayout.LayoutParams(dp(7), -1));
         home.addView(gap(dp(24)));
@@ -415,6 +428,10 @@ public final class MainActivity extends Activity {
         if (!controller.isRequested()) {
             body.addView(space(dp(28)));
             body.addView(label("보호 요청을 켜면 마지막 프리셋을 사용합니다.", 19, MUTED, false));
+            body.addView(space(dp(18)));
+            TextView assessment = action("프라이버시 점검  ›", 20);
+            assessment.setOnClickListener(v -> { currentScreen = "assessment"; render(); });
+            body.addView(assessment);
             return;
         }
 
@@ -516,7 +533,9 @@ public final class MainActivity extends Activity {
         table.addView(label("실제 보호 기능과 차량 시스템은 아직 연동되지 않았습니다.",
                 16, MUTED, false));
         table.addView(space(dp(18)));
-        table.addView(label("프라이버시 점검 준비 중", 17, MUTED, false));
+        TextView assessment = action("프라이버시 점검  ›", 17);
+        assessment.setOnClickListener(v -> { currentScreen = "assessment"; render(); });
+        table.addView(assessment);
         return panel;
     }
 
