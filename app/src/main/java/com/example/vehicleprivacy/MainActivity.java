@@ -19,7 +19,6 @@ import android.widget.Toast;
 
 import java.util.HashMap;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -46,9 +45,8 @@ public final class MainActivity extends Activity {
     private int restoredSettingsTab;
     private String restoredSettingsDetail;
     private String currentScreen = "home";
-    // No notification source or verified vehicle state is connected yet.
-    private final List<HeldNotification> heldNotifications = Collections.emptyList();
-    private final boolean notificationSourceConnected = false;
+    // This repository contains app-generated examples only, not system notifications.
+    private TestNotificationRepository testNotifications;
     private boolean detailsOpen;
     private float scale;
 
@@ -57,6 +55,8 @@ public final class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         preferences = getSharedPreferences(PREFS, MODE_PRIVATE);
         presets = new PresetRepository(new SharedPreferencesPresetStorage(preferences));
+        testNotifications = new TestNotificationRepository(
+                new SharedPreferencesTestNotificationStorage(preferences));
         String storedPreset = preferences.getString(PRESET_KEY, DEFAULT_PRESET);
         if (storedPreset == null || storedPreset.trim().isEmpty()) {
             storedPreset = DEFAULT_PRESET;
@@ -162,8 +162,9 @@ public final class MainActivity extends Activity {
         if ("presets".equals(currentScreen)) {
             root.addView(presetList(), new LinearLayout.LayoutParams(0, -1, 1f));
         } else if ("notifications".equals(currentScreen)) {
-            root.addView(new HeldNotificationsView(this, scale, heldNotifications,
-                    null, null, notificationSourceConnected, () -> navigateTo("home")).getView(),
+            root.addView(new HeldNotificationsView(this, scale, testNotifications.getNotifications(),
+                    null, null, testNotifications.hasCorruptData(), () -> navigateTo("home"),
+                    this::createTestNotification, this::clearTestNotifications).getView(),
                     new LinearLayout.LayoutParams(0, -1, 1f));
         } else if ("settings".equals(currentScreen)) {
             settingsView = new PresetSettingsView(this, scale, editingPreset,
@@ -262,6 +263,28 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private void createTestNotification() {
+        try {
+            testNotifications.addTestNotification(System.currentTimeMillis());
+            render();
+        } catch (IllegalStateException error) {
+            String message = testNotifications.getNotifications().size()
+                    >= TestNotificationRepository.MAX_NOTIFICATIONS
+                    ? "테스트 알림은 최대 100개까지 보관합니다. 삭제 후 다시 시도해 주세요."
+                    : "테스트 알림을 저장하지 못했습니다.";
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void clearTestNotifications() {
+        try {
+            testNotifications.clearTestNotifications();
+            render();
+        } catch (IllegalStateException error) {
+            Toast.makeText(this, "테스트 알림을 삭제하지 못했습니다.", Toast.LENGTH_LONG).show();
+        }
+    }
+
     private void navigateTo(String target) {
         if (target.equals(currentScreen)) return;
         Runnable change = () -> { currentScreen = target; detailsOpen = false; render(); };
@@ -316,12 +339,14 @@ public final class MainActivity extends Activity {
             notification.addView(icon(R.drawable.ic_bell), new LinearLayout.LayoutParams(dp(30), dp(30)));
             notification.addView(gap(dp(8)));
             notification.addView(label("보관 알림", 16, TEXT, false));
-            if (notificationSourceConnected && !heldNotifications.isEmpty()) {
+            int testCount = testNotifications.getNotifications().size();
+            if (!testNotifications.hasCorruptData() && testCount > 0) {
                 notification.addView(gap(dp(8)));
-                notification.addView(label(Integer.toString(heldNotifications.size()), 16, ACCENT, true));
+                notification.addView(label("테스트 " + testCount, 16, ACCENT, true));
             }
-            notification.setContentDescription(notificationSourceConnected && !heldNotifications.isEmpty()
-                    ? "보관 알림 목록 열기, " + heldNotifications.size() + "개"
+            notification.setContentDescription(testNotifications.hasCorruptData()
+                    ? "보관 알림 목록 열기, 테스트 보관함 읽기 오류"
+                    : testCount > 0 ? "보관 알림 목록 열기, 테스트 " + testCount + "개"
                     : "보관 알림 목록 열기");
             notification.setClickable(true);
             notification.setFocusable(true);
