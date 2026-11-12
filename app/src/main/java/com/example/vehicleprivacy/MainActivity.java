@@ -46,6 +46,7 @@ public final class MainActivity extends Activity {
     private DisclosureGate disclosureGate;
     private CarUxParkingVeto carUxParkingVeto;
     private HeldNotificationsView heldNotificationsView;
+    private UtteranceCheckView utteranceCheckView;
     private int restoredSettingsTab;
     private String restoredSettingsDetail;
     private String currentScreen = "home";
@@ -87,6 +88,7 @@ public final class MainActivity extends Activity {
             if ("assessment".equals(restoredScreen)) currentScreen = "assessment";
             if ("owned_preview".equals(restoredScreen)) currentScreen = "owned_preview";
             if ("audit".equals(restoredScreen)) currentScreen = "audit";
+            if ("utterance_check".equals(restoredScreen)) currentScreen = "utterance_check";
             if ("settings".equals(restoredScreen)) {
                 String editId = savedInstanceState.getString("editing_id");
                 for (Preset preset : presets.getPresets()) {
@@ -133,6 +135,11 @@ public final class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if ("utterance_check".equals(currentScreen)) {
+            currentScreen = "home";
+            render();
+            return;
+        }
         if ("audit".equals(currentScreen)) {
             currentScreen = "home";
             render();
@@ -176,6 +183,10 @@ public final class MainActivity extends Activity {
     }
 
     private void render() {
+        if (utteranceCheckView != null) {
+            utteranceCheckView.clearSensitiveInput();
+            utteranceCheckView = null;
+        }
         if (heldNotificationsView != null) {
             heldNotificationsView.close();
             heldNotificationsView = null;
@@ -198,6 +209,9 @@ public final class MainActivity extends Activity {
 
         if ("presets".equals(currentScreen)) {
             root.addView(presetList(), new LinearLayout.LayoutParams(0, -1, 1f));
+        } else if ("utterance_check".equals(currentScreen)) {
+            utteranceCheckView = new UtteranceCheckView(this, scale, () -> navigateTo("home"));
+            root.addView(utteranceCheckView.getView(), new LinearLayout.LayoutParams(0, -1, 1f));
         } else if ("audit".equals(currentScreen)) {
             root.addView(new PrivacyAuditView(this, scale, privacyAudit,
                     () -> { currentScreen = "home"; render(); }, this::clearPrivacyAudit).getView(),
@@ -248,7 +262,7 @@ public final class MainActivity extends Activity {
         home.setGravity(Gravity.CENTER_VERTICAL);
         boolean onHome = "home".equals(currentScreen) || "notifications".equals(currentScreen)
                 || "assessment".equals(currentScreen) || "owned_preview".equals(currentScreen)
-                || "audit".equals(currentScreen);
+                || "audit".equals(currentScreen) || "utterance_check".equals(currentScreen);
         if (onHome) home.setBackgroundColor(SELECTED);
         home.addView(onHome ? colorBar() : gap(dp(7)), new LinearLayout.LayoutParams(dp(7), -1));
         home.addView(gap(dp(24)));
@@ -380,6 +394,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onPause() {
         if (vehiclePreview != null) vehiclePreview.cancelHold();
+        if (utteranceCheckView != null) utteranceCheckView.clearSensitiveInput();
         if (carUxParkingVeto != null) {
             try { carUxParkingVeto.stop(); }
             catch (RuntimeException | LinkageError unavailable) { carUxParkingVeto = null; }
@@ -536,6 +551,9 @@ public final class MainActivity extends Activity {
         TextView audit = action("앱 접근 확인 기록  ›", 20);
         audit.setOnClickListener(v -> { currentScreen = "audit"; render(); });
         body.addView(audit);
+        TextView utterance = action("발화 전 문장 점검  ›", 20);
+        utterance.setOnClickListener(v -> navigateTo("utterance_check"));
+        body.addView(utterance);
     }
 
     private void addCompactSummary(LinearLayout body) {
