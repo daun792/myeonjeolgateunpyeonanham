@@ -56,6 +56,7 @@ public final class MainActivity extends Activity {
     // This repository contains app-generated examples only, not system notifications.
     private TestNotificationRepository testNotifications;
     private PrivacyAuditLog privacyAudit;
+    private ExamplePhotoApprovals examplePhotoApprovals;
     private boolean detailsOpen;
     private float scale;
 
@@ -76,6 +77,8 @@ public final class MainActivity extends Activity {
                 new SharedPreferencesTestNotificationStorage(preferences));
         privacyAudit = new PrivacyAuditLog(new SharedPreferencesPrivacyAuditStorage(preferences),
                 System::currentTimeMillis);
+        examplePhotoApprovals = new ExamplePhotoApprovals(
+                new SharedPreferencesExamplePhotoStorage(preferences));
         String storedPreset = preferences.getString(PRESET_KEY, DEFAULT_PRESET);
         if (storedPreset == null || storedPreset.trim().isEmpty()) {
             storedPreset = DEFAULT_PRESET;
@@ -93,6 +96,7 @@ public final class MainActivity extends Activity {
             if ("audit".equals(restoredScreen)) currentScreen = "audit";
             if ("utterance_check".equals(restoredScreen)) currentScreen = "utterance_check";
             if ("media_demo".equals(restoredScreen)) currentScreen = "media_demo";
+            if ("example_photos".equals(restoredScreen)) currentScreen = "example_photos";
             if ("rule_draft".equals(restoredScreen)) {
                 String id = savedInstanceState.getString("rule_draft_id");
                 for (Preset preset : presets.getPresets()) {
@@ -162,6 +166,10 @@ public final class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if ("example_photos".equals(currentScreen)) {
+            navigateTo("home");
+            return;
+        }
         if ("media_demo".equals(currentScreen)) {
             navigateTo("home");
             return;
@@ -252,6 +260,10 @@ public final class MainActivity extends Activity {
 
         if ("presets".equals(currentScreen)) {
             root.addView(presetList(), new LinearLayout.LayoutParams(0, -1, 1f));
+        } else if ("example_photos".equals(currentScreen)) {
+            root.addView(new ApprovedExamplePhotosView(this, scale, examplePhotoApprovals,
+                    controller.isRequested(), () -> navigateTo("home")).getView(),
+                    new LinearLayout.LayoutParams(0, -1, 1f));
         } else if ("media_demo".equals(currentScreen)) {
             mediaDemo = new OwnedMediaDemoView(this, scale, presets.getSelected(), () -> navigateTo("home"));
             root.addView(mediaDemo.getView(), new LinearLayout.LayoutParams(0, -1, 1f));
@@ -314,7 +326,8 @@ public final class MainActivity extends Activity {
         boolean onHome = "home".equals(currentScreen) || "notifications".equals(currentScreen)
                 || "assessment".equals(currentScreen) || "owned_preview".equals(currentScreen)
                 || "audit".equals(currentScreen) || "utterance_check".equals(currentScreen)
-                || "rule_draft".equals(currentScreen) || "media_demo".equals(currentScreen);
+                || "rule_draft".equals(currentScreen) || "media_demo".equals(currentScreen)
+                || "example_photos".equals(currentScreen);
         if (onHome) home.setBackgroundColor(SELECTED);
         home.addView(onHome ? colorBar() : gap(dp(7)), new LinearLayout.LayoutParams(dp(7), -1));
         home.addView(gap(dp(24)));
@@ -617,6 +630,9 @@ public final class MainActivity extends Activity {
 
     private void addOwnedPreviewLink(LinearLayout body) {
         body.addView(space(dp(18)));
+        TextView photos = action("가상 예시 사진 허용 목록  ›", 20);
+        photos.setOnClickListener(v -> navigateTo("example_photos"));
+        body.addView(photos);
         TextView preview = action("앱 내부 예시 보호 확인  ›", 20);
         preview.setOnClickListener(v -> { currentScreen = "owned_preview"; render(); });
         body.addView(preview);
