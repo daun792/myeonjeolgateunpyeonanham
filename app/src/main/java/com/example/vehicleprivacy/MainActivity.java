@@ -49,6 +49,7 @@ public final class MainActivity extends Activity {
     private UtteranceCheckView utteranceCheckView;
     private PrivacyRuleDraftView ruleDraftView;
     private Preset ruleDraft;
+    private OwnedMediaDemoView mediaDemo;
     private int restoredSettingsTab;
     private String restoredSettingsDetail;
     private String currentScreen = "home";
@@ -91,6 +92,7 @@ public final class MainActivity extends Activity {
             if ("owned_preview".equals(restoredScreen)) currentScreen = "owned_preview";
             if ("audit".equals(restoredScreen)) currentScreen = "audit";
             if ("utterance_check".equals(restoredScreen)) currentScreen = "utterance_check";
+            if ("media_demo".equals(restoredScreen)) currentScreen = "media_demo";
             if ("rule_draft".equals(restoredScreen)) {
                 String id = savedInstanceState.getString("rule_draft_id");
                 for (Preset preset : presets.getPresets()) {
@@ -160,6 +162,10 @@ public final class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if ("media_demo".equals(currentScreen)) {
+            navigateTo("home");
+            return;
+        }
         if ("rule_draft".equals(currentScreen)) {
             leaveRuleDraft();
             return;
@@ -212,6 +218,10 @@ public final class MainActivity extends Activity {
     }
 
     private void render() {
+        if (mediaDemo != null) {
+            mediaDemo.close();
+            mediaDemo = null;
+        }
         if (ruleDraftView != null) {
             ruleDraftView.clearSensitiveInput();
             ruleDraftView = null;
@@ -242,6 +252,9 @@ public final class MainActivity extends Activity {
 
         if ("presets".equals(currentScreen)) {
             root.addView(presetList(), new LinearLayout.LayoutParams(0, -1, 1f));
+        } else if ("media_demo".equals(currentScreen)) {
+            mediaDemo = new OwnedMediaDemoView(this, scale, presets.getSelected(), () -> navigateTo("home"));
+            root.addView(mediaDemo.getView(), new LinearLayout.LayoutParams(0, -1, 1f));
         } else if ("rule_draft".equals(currentScreen)) {
             ruleDraftView = new PrivacyRuleDraftView(this, scale, ruleDraft,
                     () -> { presets.save(ruleDraft); ruleDraft = null; currentScreen = "home"; render(); },
@@ -301,7 +314,7 @@ public final class MainActivity extends Activity {
         boolean onHome = "home".equals(currentScreen) || "notifications".equals(currentScreen)
                 || "assessment".equals(currentScreen) || "owned_preview".equals(currentScreen)
                 || "audit".equals(currentScreen) || "utterance_check".equals(currentScreen)
-                || "rule_draft".equals(currentScreen);
+                || "rule_draft".equals(currentScreen) || "media_demo".equals(currentScreen);
         if (onHome) home.setBackgroundColor(SELECTED);
         home.addView(onHome ? colorBar() : gap(dp(7)), new LinearLayout.LayoutParams(dp(7), -1));
         home.addView(gap(dp(24)));
@@ -452,6 +465,7 @@ public final class MainActivity extends Activity {
         if (vehiclePreview != null) vehiclePreview.cancelHold();
         if (utteranceCheckView != null) utteranceCheckView.clearSensitiveInput();
         if (ruleDraftView != null) ruleDraftView.clearSensitiveInput();
+        if (mediaDemo != null) { mediaDemo.close(); mediaDemo = null; }
         if (carUxParkingVeto != null) {
             try { carUxParkingVeto.stop(); }
             catch (RuntimeException | LinkageError unavailable) { carUxParkingVeto = null; }
@@ -475,7 +489,8 @@ public final class MainActivity extends Activity {
                 disclosureGate.invalidateAll();
             }
         }
-        if ("notifications".equals(currentScreen) && heldNotificationsView == null) render();
+        if (("notifications".equals(currentScreen) && heldNotificationsView == null)
+                || ("media_demo".equals(currentScreen) && mediaDemo == null)) render();
     }
 
     @Override
@@ -618,6 +633,9 @@ public final class MainActivity extends Activity {
             render();
         });
         body.addView(rule);
+        TextView media = action("앱 자체 미디어 연습  ›", 20);
+        media.setOnClickListener(v -> navigateTo("media_demo"));
+        body.addView(media);
     }
 
     private void addCompactSummary(LinearLayout body) {
