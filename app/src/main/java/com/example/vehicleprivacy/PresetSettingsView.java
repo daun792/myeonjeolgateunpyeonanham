@@ -27,17 +27,19 @@ public final class PresetSettingsView {
     private final Preset preset;
     private final Runnable onSave;
     private final Runnable onCancel;
+    private final Runnable onOpenNotifications;
     private final FrameLayout root;
     private int tab;
     private String detail = "";
 
     public PresetSettingsView(Activity activity, float scale, Preset preset,
-                              Runnable onSave, Runnable onCancel) {
+                              Runnable onSave, Runnable onCancel, Runnable onOpenNotifications) {
         this.activity = activity;
         this.scale = scale;
         this.preset = preset;
         this.onSave = onSave;
         this.onCancel = onCancel;
+        this.onOpenNotifications = onOpenNotifications;
         this.root = new FrameLayout(activity);
         render();
     }
@@ -182,7 +184,7 @@ public final class PresetSettingsView {
                 heading(page, "알림 미리보기");
                 simpleSetting(page, "알림 미리보기 가리기", "hide_notification_preview", true);
                 simpleSetting(page, "보호 중 알림 보관", "hold_notifications", true);
-                unavailable(page, "보관 알림 확인");
+                notificationLink(page);
                 break;
             case "door": case "location":
                 heading(page, detail.equals("door") ? "문 열림 조건" : "장소 조건");
@@ -271,6 +273,17 @@ public final class PresetSettingsView {
         TextView item = label(title + " · 준비 중", 19, MUTED, false);
         item.setGravity(Gravity.CENTER_VERTICAL);
         parent.addView(item, new LinearLayout.LayoutParams(-1, dp(60)));
+        parent.addView(line(), new LinearLayout.LayoutParams(-1, dp(1)));
+    }
+    private void notificationLink(LinearLayout parent) {
+        TextView link = label("보관 알림 확인  ›", 19, ACCENT, true);
+        link.setGravity(Gravity.CENTER_VERTICAL);
+        link.setMinHeight(dp(48));
+        link.setClickable(true);
+        link.setFocusable(true);
+        link.setContentDescription("보관 알림 확인");
+        link.setOnClickListener(v -> onOpenNotifications.run());
+        parent.addView(link, new LinearLayout.LayoutParams(-1, dp(60)));
         parent.addView(line(), new LinearLayout.LayoutParams(-1, dp(1)));
     }
     private void footer(LinearLayout page) {

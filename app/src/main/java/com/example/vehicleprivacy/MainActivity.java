@@ -19,6 +19,7 @@ import android.widget.Toast;
 
 import java.util.HashMap;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -44,6 +45,9 @@ public final class MainActivity extends Activity {
     private int restoredSettingsTab;
     private String restoredSettingsDetail;
     private String currentScreen = "home";
+    // No notification source or verified vehicle state is connected yet.
+    private final List<HeldNotification> heldNotifications = Collections.emptyList();
+    private final boolean notificationSourceConnected = false;
     private boolean detailsOpen;
     private float scale;
 
@@ -62,6 +66,7 @@ public final class MainActivity extends Activity {
         if (savedInstanceState != null) {
             String restoredScreen = savedInstanceState.getString("current_screen", "home");
             if ("presets".equals(restoredScreen)) currentScreen = "presets";
+            if ("notifications".equals(restoredScreen)) currentScreen = "notifications";
             if ("settings".equals(restoredScreen)) {
                 String editId = savedInstanceState.getString("editing_id");
                 for (Preset preset : presets.getPresets()) {
@@ -108,6 +113,11 @@ public final class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if ("notifications".equals(currentScreen)) {
+            currentScreen = "home";
+            render();
+            return;
+        }
         if ("settings".equals(currentScreen)) {
             if (settingsView != null && settingsView.handleBack()) return;
             confirmDiscard(() -> { currentScreen = "presets"; render(); });
@@ -135,10 +145,15 @@ public final class MainActivity extends Activity {
 
         if ("presets".equals(currentScreen)) {
             root.addView(presetList(), new LinearLayout.LayoutParams(0, -1, 1f));
+        } else if ("notifications".equals(currentScreen)) {
+            root.addView(new HeldNotificationsView(this, scale, heldNotifications,
+                    null, null, notificationSourceConnected, () -> navigateTo("home")).getView(),
+                    new LinearLayout.LayoutParams(0, -1, 1f));
         } else if ("settings".equals(currentScreen)) {
             settingsView = new PresetSettingsView(this, scale, editingPreset,
                     () -> { presets.save(editingPreset); currentScreen = "presets"; render(); },
-                    () -> { currentScreen = "presets"; render(); });
+                    () -> { currentScreen = "presets"; render(); },
+                    () -> navigateTo("notifications"));
             settingsView.restoreLocation(restoredSettingsTab, restoredSettingsDetail);
             restoredSettingsTab = 0;
             restoredSettingsDetail = null;
@@ -161,7 +176,7 @@ public final class MainActivity extends Activity {
 
         LinearLayout home = row();
         home.setGravity(Gravity.CENTER_VERTICAL);
-        boolean onHome = "home".equals(currentScreen);
+        boolean onHome = "home".equals(currentScreen) || "notifications".equals(currentScreen);
         if (onHome) home.setBackgroundColor(SELECTED);
         home.addView(onHome ? colorBar() : gap(dp(7)), new LinearLayout.LayoutParams(dp(7), -1));
         home.addView(gap(dp(24)));
@@ -268,8 +283,19 @@ public final class MainActivity extends Activity {
             notification.setGravity(Gravity.CENTER_VERTICAL);
             notification.addView(icon(R.drawable.ic_bell), new LinearLayout.LayoutParams(dp(30), dp(30)));
             notification.addView(gap(dp(8)));
-            notification.addView(label("보관 알림 준비 중", 14, MUTED, false));
-            notification.setContentDescription("보관 알림, 준비 중");
+            notification.addView(label("보관 알림", 16, TEXT, false));
+            if (notificationSourceConnected && !heldNotifications.isEmpty()) {
+                notification.addView(gap(dp(8)));
+                notification.addView(label(Integer.toString(heldNotifications.size()), 16, ACCENT, true));
+            }
+            notification.setContentDescription(notificationSourceConnected && !heldNotifications.isEmpty()
+                    ? "보관 알림 목록 열기, " + heldNotifications.size() + "개"
+                    : "보관 알림 목록 열기");
+            notification.setClickable(true);
+            notification.setFocusable(true);
+            notification.setPadding(dp(12), dp(10), dp(12), dp(10));
+            notification.setMinimumHeight(dp(48));
+            notification.setOnClickListener(v -> navigateTo("notifications"));
             header.addView(notification);
         }
         container.addView(header, new LinearLayout.LayoutParams(-1, dp(67)));
