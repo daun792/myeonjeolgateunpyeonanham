@@ -4,6 +4,7 @@
         android:allowBackup="false"
         android:label="프라이버시 보호"
         android:theme="@style/AppTheme">
+        <uses-library android:name="android.car" android:required="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

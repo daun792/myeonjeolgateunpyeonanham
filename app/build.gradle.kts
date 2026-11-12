@@ -9,6 +9,7 @@ providers.environmentVariable("PRIVACY_APP_BUILD_DIR").orNull
 android {
     namespace = "com.example.vehicleprivacy"
     compileSdk = 37
+    useLibrary("android.car")
 
     defaultConfig {
         applicationId = "com.example.vehicleprivacy"

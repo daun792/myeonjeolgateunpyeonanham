@@ -44,6 +44,7 @@ public final class MainActivity extends Activity {
     private PresetSettingsView settingsView;
     private VehiclePreviewView vehiclePreview;
     private DisclosureGate disclosureGate;
+    private CarUxParkingVeto carUxParkingVeto;
     private HeldNotificationsView heldNotificationsView;
     private int restoredSettingsTab;
     private String restoredSettingsDetail;
@@ -60,6 +61,11 @@ public final class MainActivity extends Activity {
         // No verified protection or parking provider is connected yet: both start unknown.
         disclosureGate = new DisclosureGate(SystemClock::elapsedRealtime, 5_000L);
         disclosureGate.beginSession();
+        try {
+            carUxParkingVeto = new CarUxParkingVeto(this, disclosureGate);
+        } catch (RuntimeException | LinkageError unavailable) {
+            carUxParkingVeto = null;
+        }
         presets = new PresetRepository(new SharedPreferencesPresetStorage(preferences));
         testNotifications = new TestNotificationRepository(
                 new SharedPreferencesTestNotificationStorage(preferences));
@@ -345,6 +351,10 @@ public final class MainActivity extends Activity {
     @Override
     protected void onPause() {
         if (vehiclePreview != null) vehiclePreview.cancelHold();
+        if (carUxParkingVeto != null) {
+            try { carUxParkingVeto.stop(); }
+            catch (RuntimeException | LinkageError unavailable) { carUxParkingVeto = null; }
+        }
         disclosureGate.invalidateAll();
         if (heldNotificationsView != null) {
             heldNotificationsView.close();
@@ -356,7 +366,14 @@ public final class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        disclosureGate.beginSession();
+        long session = disclosureGate.beginSession();
+        if (carUxParkingVeto != null) {
+            try { carUxParkingVeto.start(session); }
+            catch (RuntimeException | LinkageError unavailable) {
+                carUxParkingVeto = null;
+                disclosureGate.invalidateAll();
+            }
+        }
         if ("notifications".equals(currentScreen) && heldNotificationsView == null) render();
     }
 
