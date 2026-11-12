@@ -5,8 +5,11 @@ import android.app.AlertDialog;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.Gravity;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -14,6 +17,7 @@ import android.widget.TextView;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 /** Shows only masked rows; opening content requires confirmed protection and parking states. */
 public final class HeldNotificationsView {
@@ -25,33 +29,100 @@ public final class HeldNotificationsView {
     private final Activity activity;
     private final float scale;
     private final List<HeldNotification> items;
-    private final Boolean protectionApplied;
-    private final Boolean parked;
+    private final DisclosureGate gate;
     private final boolean storageProblem;
     private final Runnable onBack;
     private final Runnable onCreateTest;
     private final Runnable onClearTests;
     private final LinearLayout root;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final DisclosureGate.Listener gateListener = this::onAccessChanged;
+    private final Runnable expiryCheck = this::checkExpiry;
+    private AlertDialog detailDialog;
+    private boolean closed;
+    private boolean listening;
 
     public HeldNotificationsView(Activity activity, float scale, List<HeldNotification> items,
-                                 Boolean protectionApplied, Boolean parked,
+                                 DisclosureGate gate,
                                  boolean storageProblem, Runnable onBack, Runnable onCreateTest,
                                  Runnable onClearTests) {
         this.activity = activity;
         this.scale = scale;
         this.items = items == null ? Collections.emptyList() : new ArrayList<>(items);
-        this.protectionApplied = protectionApplied;
-        this.parked = parked;
+        this.gate = Objects.requireNonNull(gate);
         this.storageProblem = storageProblem;
         this.onBack = onBack;
         this.onCreateTest = onCreateTest;
         this.onClearTests = onClearTests;
-        root = column();
+        root = new LinearLayout(activity) {
+            @Override protected void onAttachedToWindow() {
+                super.onAttachedToWindow();
+                attachGate();
+            }
+
+            @Override protected void onDetachedFromWindow() {
+                close();
+                super.onDetachedFromWindow();
+            }
+        };
+        root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(42), dp(25), dp(42), dp(30));
         render();
     }
 
     public View getView() { return root; }
+
+    /** Revoke any open detail and detach callbacks when leaving this view. */
+    public void close() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            handler.post(this::close);
+            return;
+        }
+        if (closed) return;
+        closed = true;
+        handler.removeCallbacks(expiryCheck);
+        dismissDetail();
+        if (listening) {
+            gate.clearListener(gateListener);
+            listening = false;
+        }
+    }
+
+    private void attachGate() {
+        if (closed || listening) return;
+        listening = true;
+        gate.setListener(gateListener);
+        scheduleExpiryCheck();
+    }
+
+    private void onAccessChanged(boolean allowed) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            handler.post(() -> onAccessChanged(allowed));
+            return;
+        }
+        if (closed) return;
+        if (!allowed) dismissDetail();
+        scheduleExpiryCheck();
+    }
+
+    private void checkExpiry() {
+        if (closed) return;
+        if (!gate.refresh()) dismissDetail();
+        scheduleExpiryCheck();
+    }
+
+    private void scheduleExpiryCheck() {
+        handler.removeCallbacks(expiryCheck);
+        if (closed || !listening) return;
+        long delay = gate.nextRecheckDelayMillis();
+        if (delay >= 0) handler.postDelayed(expiryCheck, Math.max(1L, delay));
+    }
+
+    private void dismissDetail() {
+        AlertDialog open = detailDialog;
+        detailDialog = null;
+        if (open != null) open.dismiss();
+    }
 
     private void render() {
         TextView back = action("‹ 홈");
@@ -153,23 +224,43 @@ public final class HeldNotificationsView {
     }
 
     private void showSelected(HeldNotification item) {
-        if (storageProblem || !Boolean.FALSE.equals(protectionApplied) || !Boolean.TRUE.equals(parked)) {
+        if (closed || !listening) return;
+        // Gate state is revalidated on the main thread immediately before rendering.
+        if (storageProblem || !gate.refresh()) {
             new AlertDialog.Builder(activity).setTitle("내용을 확인할 수 없습니다")
                     .setMessage(blockedReason())
                     .setPositiveButton("확인", null).show();
             return;
         }
-        String source = item.getSourceIfAllowed(protectionApplied, parked).orElse(null);
-        String body = item.getBodyIfAllowed(protectionApplied, parked).orElse(null);
+        // Only a verified open gate permits access to these fixed, app-generated examples.
+        String source = item.getSourceIfAllowed(gate).orElse(null);
+        String body = item.getBodyIfAllowed(gate).orElse(null);
         if (source == null || body == null) {
             new AlertDialog.Builder(activity).setTitle("내용을 확인할 수 없습니다")
                     .setMessage("알림 내용을 불러올 수 없습니다.")
                     .setPositiveButton("확인", null).show();
             return;
         }
-        new AlertDialog.Builder(activity).setTitle("보관 알림")
+        if (!gate.refresh()) return;
+        dismissDetail();
+        AlertDialog dialog = new AlertDialog.Builder(activity).setTitle("보관 알림")
                 .setMessage("출처: " + source + "\n\n" + body)
-                .setPositiveButton("닫기", null).show();
+                .setPositiveButton("닫기", null).create();
+        if (dialog.getWindow() == null) return;
+        dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        detailDialog = dialog;
+        dialog.setOnDismissListener(ignored -> {
+            if (detailDialog == dialog) detailDialog = null;
+        });
+        dialog.setOnShowListener(ignored -> dialog.getWindow().getDecorView()
+                .getViewTreeObserver().addOnWindowFocusChangeListener(hasFocus -> {
+                    if (!hasFocus && detailDialog == dialog) dismissDetail();
+                }));
+        if (!gate.refresh()) {
+            dismissDetail();
+            return;
+        }
+        dialog.show();
     }
 
     private void confirmClearTests() {
@@ -183,12 +274,7 @@ public final class HeldNotificationsView {
 
     private String blockedReason() {
         if (storageProblem) return "테스트 보관함을 읽을 수 없습니다.";
-        if (protectionApplied == null || parked == null) {
-            return "실제 보호 상태와 주차 상태를 확인한 뒤 내용을 볼 수 있습니다.";
-        }
-        if (protectionApplied && !parked) return "보호를 해제하고 주차한 뒤 확인해 주세요.";
-        if (protectionApplied) return "보호를 해제한 뒤 주차 상태에서 확인해 주세요.";
-        return "주차한 뒤 확인해 주세요.";
+        return "실제 보호 해제와 주차 상태를 모두 확인한 뒤 내용을 볼 수 있습니다.";
     }
 
     private TextView action(String text) {

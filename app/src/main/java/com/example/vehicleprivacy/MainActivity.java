@@ -7,6 +7,7 @@ import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.ImageView;
@@ -42,6 +43,8 @@ public final class MainActivity extends Activity {
     private Preset editingPreset;
     private PresetSettingsView settingsView;
     private VehiclePreviewView vehiclePreview;
+    private DisclosureGate disclosureGate;
+    private HeldNotificationsView heldNotificationsView;
     private int restoredSettingsTab;
     private String restoredSettingsDetail;
     private String currentScreen = "home";
@@ -54,6 +57,9 @@ public final class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         preferences = getSharedPreferences(PREFS, MODE_PRIVATE);
+        // No verified protection or parking provider is connected yet: both start unknown.
+        disclosureGate = new DisclosureGate(SystemClock::elapsedRealtime, 5_000L);
+        disclosureGate.beginSession();
         presets = new PresetRepository(new SharedPreferencesPresetStorage(preferences));
         testNotifications = new TestNotificationRepository(
                 new SharedPreferencesTestNotificationStorage(preferences));
@@ -143,6 +149,10 @@ public final class MainActivity extends Activity {
     }
 
     private void render() {
+        if (heldNotificationsView != null) {
+            heldNotificationsView.close();
+            heldNotificationsView = null;
+        }
         if ("simulation".equals(currentScreen)) {
             vehiclePreview = new VehiclePreviewView(this, scale,
                     new TemporaryReveal(presets.getSelected()), () -> navigateTo("home"));
@@ -162,10 +172,11 @@ public final class MainActivity extends Activity {
         if ("presets".equals(currentScreen)) {
             root.addView(presetList(), new LinearLayout.LayoutParams(0, -1, 1f));
         } else if ("notifications".equals(currentScreen)) {
-            root.addView(new HeldNotificationsView(this, scale, testNotifications.getNotifications(),
-                    null, null, testNotifications.hasCorruptData(), () -> navigateTo("home"),
-                    this::createTestNotification, this::clearTestNotifications).getView(),
-                    new LinearLayout.LayoutParams(0, -1, 1f));
+            heldNotificationsView = new HeldNotificationsView(this, scale,
+                    testNotifications.getNotifications(), disclosureGate,
+                    testNotifications.hasCorruptData(), () -> navigateTo("home"),
+                    this::createTestNotification, this::clearTestNotifications);
+            root.addView(heldNotificationsView.getView(), new LinearLayout.LayoutParams(0, -1, 1f));
         } else if ("settings".equals(currentScreen)) {
             settingsView = new PresetSettingsView(this, scale, editingPreset,
                     () -> { presets.save(editingPreset); currentScreen = "presets"; render(); },
@@ -311,13 +322,26 @@ public final class MainActivity extends Activity {
     @Override
     protected void onPause() {
         if (vehiclePreview != null) vehiclePreview.cancelHold();
+        disclosureGate.invalidateAll();
+        if (heldNotificationsView != null) {
+            heldNotificationsView.close();
+            heldNotificationsView = null;
+        }
         super.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        disclosureGate.beginSession();
+        if ("notifications".equals(currentScreen) && heldNotificationsView == null) render();
     }
 
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (!hasFocus && vehiclePreview != null) vehiclePreview.cancelHold();
+        if (hasFocus && disclosureGate != null) disclosureGate.refresh();
     }
 
     private LinearLayout homeContent(boolean compact) {

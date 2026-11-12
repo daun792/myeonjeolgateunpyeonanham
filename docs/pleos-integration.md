@@ -9,11 +9,12 @@
 - 서비스는 `pleos.car.permission.CAR_DRIVE`를 `normal` 권한으로 선언합니다. 패키지와 권한의 존재만으로 특정 차량 속성의 지원, 앱 호출 성공 또는 실차 적용이 검증되는 것은 아닙니다.
 - 에뮬레이터의 `dumpsys car_service --services CarPropertyService`에서는 `GEAR_SELECTION`(`0x11400400`), `PARKING_BRAKE_ON`(`0x11200402`), `PERF_VEHICLE_SPEED`(`0x11600207`)에 다른 클라이언트의 등록이 보였습니다. 이는 시스템 진단 결과이며 일반 앱의 접근 권한이나 실제 값의 신뢰성을 확인한 것은 아닙니다.
 - 이번에 확인한 Android SDK 디렉터리와 Gradle 의존성 캐시에는 별도의 Pleos Vehicle SDK AAR/JAR이 없었습니다. 에뮬레이터 시스템 이미지 설치만으로 앱의 SDK 의존성이 설정된 것은 아닙니다.
+- 이후 독립 [읽기 진단 프로젝트](../tools/pleos-probe/README.md)에서 공식 Vehicle SDK 2.3.2를 의존성으로 받아 연결과 페달 상태 조회를 시험했습니다. 2.1 AVD에서는 `initialize`, 브레이크 페달 capability `READ`, 페달 상태 `false` 응답을 확인했습니다. 이것은 페달 읽기 성공일 뿐 주차 판정이나 실차에서의 접근 권한을 확인한 결과가 아닙니다. 메인 앱의 SDK 의존성과 차량 권한은 변경하지 않았습니다.
 
 ## 차량 주차 상태와 권한
 
 - [PLEOS Vehicle SDK 안내](https://document.pleos.ai/en/docs/pleos-only/connect-sdk-pleos/Vehicle/intro)는 Vehicle SDK 2.3.2와 Vehicle Service 2.3.21 기준으로 Brake 도메인의 브레이크 페달·주차 브레이크 상태 조회를 설명합니다. 다만 확인한 [Brake API 목록](https://document.pleos.ai/en/docs/pleos-only/connect-sdk-pleos/Vehicle/vehicle/ai.pleos.playground.vehicle.api/brake/entry)에는 페달 관련 메서드만 표시되어, 주차 브레이크에 대응하는 구체적인 공개 메서드는 아직 확인하지 못했습니다. 도메인별 지원 여부는 capability API로 확인해야 합니다.
-- [Vehicle SDK 의존성 안내](https://document.pleos.ai/en/docs/pleos-only/connect-sdk-pleos/Vehicle/project-setup)의 예시는 Pleos Maven 저장소와 `ai.pleos.playground:Vehicle:2.3.2` 의존성을 사용합니다. 2026-11-12 인증 정보 없이 읽기 전용 HTTP HEAD 요청으로 해당 [2.3.2 POM](https://nexus-playground.pleos.ai/repository/maven-releases/ai/pleos/playground/Vehicle/2.3.2/Vehicle-2.3.2.pom)과 [Maven 메타데이터](https://nexus-playground.pleos.ai/repository/maven-releases/ai/pleos/playground/Vehicle/maven-metadata.xml)가 각각 HTTP 200을 반환함을 확인했습니다. SDK 바이너리는 다운로드하지 않았습니다. 이 결과는 의존성 다운로드·API 호출 성공이나 설치된 이미지와의 호환성을 보장하지 않습니다.
+- [Vehicle SDK 의존성 안내](https://document.pleos.ai/en/docs/pleos-only/connect-sdk-pleos/Vehicle/project-setup)의 예시는 Pleos Maven 저장소와 `ai.pleos.playground:Vehicle:2.3.2` 의존성을 사용합니다. 2026-11-12 인증 정보 없이 읽기 전용 HTTP HEAD 요청으로 해당 [2.3.2 POM](https://nexus-playground.pleos.ai/repository/maven-releases/ai/pleos/playground/Vehicle/2.3.2/Vehicle-2.3.2.pom)과 [Maven 메타데이터](https://nexus-playground.pleos.ai/repository/maven-releases/ai/pleos/playground/Vehicle/maven-metadata.xml)가 각각 HTTP 200을 반환함을 확인했습니다. 그 후 별도 진단 프로젝트에서 SDK를 다운로드하여 위의 페달 조회를 시험했습니다. 해당 조회의 성공이 다른 API나 실차 호환성까지 보장하지는 않습니다.
 - [PLEOS 권한 안내](https://document.pleos.ai/en/docs/pleos-only/connect-sdk-pleos/Vehicle/vehicle-permission)는 Brake, DrivingMode, Odometer의 대표 조회 권한으로 `pleos.car.permission.CAR_DRIVE`를 제시합니다. 개별 API의 요구 권한은 해당 함수의 `@RequiresPermission`을 확인해야 합니다. [SDK 개요](https://document.pleos.ai/en/api-reference/connect-sdk-pleos/)에 따르면 Vehicle SDK 권한 사용은 App Market과 사전 협의·승인된 범위를 따라야 합니다.
 - [Android Automotive 차량 속성 문서](https://developer.android.com/reference/android/car/VehiclePropertyIds)는 `GEAR_SELECTION`과 `PARKING_BRAKE_ON` 읽기에 `Car.PERMISSION_POWERTRAIN`, `PERF_VEHICLE_SPEED` 읽기에 `Car.PERMISSION_SPEED`를 명시합니다. [권한 상수](https://developer.android.com/reference/android/car/Car)에 따르면 각각 `android.car.permission.CAR_POWERTRAIN`(normal), `android.car.permission.CAR_SPEED`(dangerous)입니다. 이는 Android 문서상의 후보 API이며, 이 PLEOS 이미지에서 실제 값·권한·지원 여부는 아직 앱으로 검증하지 않았습니다.
 - 주차 브레이크 작동, P 기어 또는 속도 0 중 하나만으로 안전한 주차 상태가 확인됐다고 단정하지 않습니다. 실제 주차 판정, 값의 신선도, 오류·연결 해제 처리와 허용 정책은 확인이 필요합니다. 확인 불가 또는 상태 변경 시 비공개가 기본이어야 합니다.
@@ -27,4 +28,4 @@
 
 ## 실제 공개 기능을 연결하기 전
 
-실제 보호 해제와 주차가 신뢰할 수 있는 최신 상태로 확인된 경우에만 사용자가 선택한 항목을 표시하고, 둘 중 하나라도 불명·실패·연결 해제라면 가립니다. 상세 화면이 열린 뒤 상태가 바뀌어도 즉시 내용을 숨기도록 실제 상태 공급자와 화면 생명주기를 함께 검증해야 합니다.
+실제 보호 해제와 주차가 신뢰할 수 있는 최신 상태로 확인된 경우에만 사용자가 선택한 항목을 표시하고, 둘 중 하나라도 불명·실패·연결 해제라면 가립니다. 앱에는 상태 만료와 화면 이탈 시 상세를 닫는 게이트를 추가했지만 실제 상태 공급자는 연결되지 않았습니다. 추후 공급자를 연결할 때는 메인 스레드에서 새 세대 토큰으로 구독하고, 실제 차량 상태 변경과 화면 생명주기를 함께 검증해야 합니다.

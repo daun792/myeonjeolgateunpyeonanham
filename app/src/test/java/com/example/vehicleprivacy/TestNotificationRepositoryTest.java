@@ -8,6 +8,13 @@ import java.util.List;
 import static org.junit.Assert.*;
 
 public class TestNotificationRepositoryTest {
+    private DisclosureGate verifiedGate() {
+        DisclosureGate gate = new DisclosureGate(() -> 1000L, 5000L);
+        long session = gate.beginSession();
+        gate.updateProtection(session, 1, false, 1000L);
+        gate.updateParking(session, 1, true, 1000L);
+        return gate;
+    }
     static final class MemoryStorage implements TestNotificationRepository.Storage {
         String data;
         String backup;
@@ -35,8 +42,8 @@ public class TestNotificationRepositoryTest {
         assertNotEquals(first.getId(), second.getId());
         assertEquals(1000, restored.get(0).getReceivedAtMillis());
         assertEquals(2000, restored.get(1).getReceivedAtMillis());
-        assertEquals("앱 테스트 알림", restored.get(0).getSourceIfAllowed(false, true).orElse(null));
-        assertFalse(restored.get(0).getBodyIfAllowed(null, null).isPresent());
+        assertEquals("앱 테스트 알림", restored.get(0).getSourceIfAllowed(verifiedGate()).orElse(null));
+        assertFalse(restored.get(0).getBodyIfAllowed(null).isPresent());
         restored.clear();
         assertEquals(2, repository.getNotifications().size());
     }
@@ -48,7 +55,7 @@ public class TestNotificationRepositoryTest {
         String raw = new String(Base64.getDecoder().decode(storage.data), StandardCharsets.UTF_8);
         assertTrue(raw.contains(notification.getId()));
         assertFalse(raw.contains("앱 테스트 알림"));
-        assertFalse(raw.contains(notification.getBodyIfAllowed(false, true).get()));
+        assertFalse(raw.contains(notification.getBodyIfAllowed(verifiedGate()).get()));
     }
 
     @Test public void damagedDataIsNotOverwrittenUntilExplicitCreationAndIsBackedUp() {

@@ -8,19 +8,20 @@ public class HeldNotificationTest {
             new HeldNotification("n1", 1234L, "메신저 개인 계정", "민감한 대화 내용");
 
     @Test public void onlyConfirmedReleaseAndParkingAllowsDetails() {
-        assertTrue(notification.canReveal(false, true));
-        assertEquals("민감한 대화 내용", notification.getBodyIfAllowed(false, true).orElse(null));
-        assertEquals("메신저 개인 계정", notification.getSourceIfAllowed(false, true).orElse(null));
-
         for (Boolean applied : new Boolean[] {null, false, true}) {
             for (Boolean parked : new Boolean[] {null, false, true}) {
-                if (Boolean.FALSE.equals(applied) && Boolean.TRUE.equals(parked)) continue;
-                assertFalse("applied=" + applied + ", parked=" + parked,
-                        notification.canReveal(applied, parked));
-                assertFalse(notification.getBodyIfAllowed(applied, parked).isPresent());
-                assertFalse(notification.getSourceIfAllowed(applied, parked).isPresent());
+                DisclosureGate gate = new DisclosureGate(() -> 1000L, 5000L);
+                long session = gate.beginSession();
+                gate.updateProtection(session, 1, applied, 1000L);
+                gate.updateParking(session, 1, parked, 1000L);
+                boolean allowed = Boolean.FALSE.equals(applied) && Boolean.TRUE.equals(parked);
+                assertEquals("applied=" + applied + ", parked=" + parked,
+                        allowed, notification.canReveal(gate));
+                assertEquals(allowed, notification.getBodyIfAllowed(gate).isPresent());
+                assertEquals(allowed, notification.getSourceIfAllowed(gate).isPresent());
             }
         }
+        assertFalse(notification.getBodyIfAllowed(null).isPresent());
     }
 
     @Test public void listAndAccessibilityNeverIncludePrivateFields() {

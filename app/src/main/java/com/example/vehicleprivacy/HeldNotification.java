@@ -22,16 +22,16 @@ public final class HeldNotification {
     public String getListText() { return "보관된 알림"; }
     public String getAccessibilityText() { return "보관된 알림, 내용 숨김"; }
 
-    /** Unknown protection or parking status must not unlock private content. */
-    public boolean canReveal(Boolean protectionApplied, Boolean parked) {
-        return Boolean.FALSE.equals(protectionApplied) && Boolean.TRUE.equals(parked);
+    /** Missing, stale or unverified protection and parking evidence keeps content hidden. */
+    public boolean canReveal(DisclosureGate gate) {
+        return gate != null && gate.isAllowed();
     }
 
-    public Optional<String> getBodyIfAllowed(Boolean protectionApplied, Boolean parked) {
-        return canReveal(protectionApplied, parked) ? Optional.of(body) : Optional.empty();
+    public Optional<String> getBodyIfAllowed(DisclosureGate gate) {
+        return canReveal(gate) ? Optional.of(body) : Optional.empty();
     }
 
-    public Optional<String> getSourceIfAllowed(Boolean protectionApplied, Boolean parked) {
-        return canReveal(protectionApplied, parked) ? Optional.of(source) : Optional.empty();
+    public Optional<String> getSourceIfAllowed(DisclosureGate gate) {
+        return canReveal(gate) ? Optional.of(source) : Optional.empty();
     }
 }
