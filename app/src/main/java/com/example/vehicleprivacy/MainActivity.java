@@ -76,6 +76,7 @@ public final class MainActivity extends Activity {
             if ("notifications".equals(restoredScreen)) currentScreen = "notifications";
             if ("simulation".equals(restoredScreen)) currentScreen = "simulation";
             if ("assessment".equals(restoredScreen)) currentScreen = "assessment";
+            if ("owned_preview".equals(restoredScreen)) currentScreen = "owned_preview";
             if ("settings".equals(restoredScreen)) {
                 String editId = savedInstanceState.getString("editing_id");
                 for (Preset preset : presets.getPresets()) {
@@ -122,6 +123,11 @@ public final class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if ("owned_preview".equals(currentScreen)) {
+            currentScreen = "home";
+            render();
+            return;
+        }
         if ("assessment".equals(currentScreen)) {
             currentScreen = "home";
             render();
@@ -177,6 +183,10 @@ public final class MainActivity extends Activity {
 
         if ("presets".equals(currentScreen)) {
             root.addView(presetList(), new LinearLayout.LayoutParams(0, -1, 1f));
+        } else if ("owned_preview".equals(currentScreen)) {
+            root.addView(new OwnedPrivacyContentView(this, scale, presets.getSelected(),
+                    controller.isRequested(), () -> { currentScreen = "home"; render(); }).getView(),
+                    new LinearLayout.LayoutParams(0, -1, 1f));
         } else if ("assessment".equals(currentScreen)) {
             root.addView(new PrivacyAssessmentView(this, scale, presets.getSelected(),
                     () -> { currentScreen = "home"; render(); },
@@ -217,7 +227,7 @@ public final class MainActivity extends Activity {
         LinearLayout home = row();
         home.setGravity(Gravity.CENTER_VERTICAL);
         boolean onHome = "home".equals(currentScreen) || "notifications".equals(currentScreen)
-                || "assessment".equals(currentScreen);
+                || "assessment".equals(currentScreen) || "owned_preview".equals(currentScreen);
         if (onHome) home.setBackgroundColor(SELECTED);
         home.addView(onHome ? colorBar() : gap(dp(7)), new LinearLayout.LayoutParams(dp(7), -1));
         home.addView(gap(dp(24)));
@@ -432,6 +442,7 @@ public final class MainActivity extends Activity {
             TextView assessment = action("프라이버시 점검  ›", 20);
             assessment.setOnClickListener(v -> { currentScreen = "assessment"; render(); });
             body.addView(assessment);
+            addOwnedPreviewLink(body);
             return;
         }
 
@@ -468,6 +479,14 @@ public final class MainActivity extends Activity {
         body.addView(space(dp(18)));
         body.addView(label("요청 상태만 저장됩니다. 실제 보호 기능은 아직 연동되지 않았습니다.",
                 16, MUTED, false));
+        addOwnedPreviewLink(body);
+    }
+
+    private void addOwnedPreviewLink(LinearLayout body) {
+        body.addView(space(dp(18)));
+        TextView preview = action("앱 내부 예시 보호 확인  ›", 20);
+        preview.setOnClickListener(v -> { currentScreen = "owned_preview"; render(); });
+        body.addView(preview);
     }
 
     private void addCompactSummary(LinearLayout body) {
