@@ -51,6 +51,7 @@ public final class MainActivity extends Activity {
     private String currentScreen = "home";
     // This repository contains app-generated examples only, not system notifications.
     private TestNotificationRepository testNotifications;
+    private PrivacyAuditLog privacyAudit;
     private boolean detailsOpen;
     private float scale;
 
@@ -69,6 +70,8 @@ public final class MainActivity extends Activity {
         presets = new PresetRepository(new SharedPreferencesPresetStorage(preferences));
         testNotifications = new TestNotificationRepository(
                 new SharedPreferencesTestNotificationStorage(preferences));
+        privacyAudit = new PrivacyAuditLog(new SharedPreferencesPrivacyAuditStorage(preferences),
+                System::currentTimeMillis);
         String storedPreset = preferences.getString(PRESET_KEY, DEFAULT_PRESET);
         if (storedPreset == null || storedPreset.trim().isEmpty()) {
             storedPreset = DEFAULT_PRESET;
@@ -83,6 +86,7 @@ public final class MainActivity extends Activity {
             if ("simulation".equals(restoredScreen)) currentScreen = "simulation";
             if ("assessment".equals(restoredScreen)) currentScreen = "assessment";
             if ("owned_preview".equals(restoredScreen)) currentScreen = "owned_preview";
+            if ("audit".equals(restoredScreen)) currentScreen = "audit";
             if ("settings".equals(restoredScreen)) {
                 String editId = savedInstanceState.getString("editing_id");
                 for (Preset preset : presets.getPresets()) {
@@ -129,6 +133,11 @@ public final class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if ("audit".equals(currentScreen)) {
+            currentScreen = "home";
+            render();
+            return;
+        }
         if ("owned_preview".equals(currentScreen)) {
             currentScreen = "home";
             render();
@@ -189,6 +198,10 @@ public final class MainActivity extends Activity {
 
         if ("presets".equals(currentScreen)) {
             root.addView(presetList(), new LinearLayout.LayoutParams(0, -1, 1f));
+        } else if ("audit".equals(currentScreen)) {
+            root.addView(new PrivacyAuditView(this, scale, privacyAudit,
+                    () -> { currentScreen = "home"; render(); }, this::clearPrivacyAudit).getView(),
+                    new LinearLayout.LayoutParams(0, -1, 1f));
         } else if ("owned_preview".equals(currentScreen)) {
             root.addView(new OwnedPrivacyContentView(this, scale, presets.getSelected(),
                     controller.isRequested(), () -> { currentScreen = "home"; render(); }).getView(),
@@ -203,7 +216,8 @@ public final class MainActivity extends Activity {
             heldNotificationsView = new HeldNotificationsView(this, scale,
                     testNotifications.getNotifications(), disclosureGate,
                     testNotifications.hasCorruptData(), () -> navigateTo("home"),
-                    this::createTestNotification, this::clearTestNotifications);
+                    this::createTestNotification, this::clearTestNotifications,
+                    this::recordPrivacyAttempt);
             root.addView(heldNotificationsView.getView(), new LinearLayout.LayoutParams(0, -1, 1f));
         } else if ("settings".equals(currentScreen)) {
             settingsView = new PresetSettingsView(this, scale, editingPreset,
@@ -233,7 +247,8 @@ public final class MainActivity extends Activity {
         LinearLayout home = row();
         home.setGravity(Gravity.CENTER_VERTICAL);
         boolean onHome = "home".equals(currentScreen) || "notifications".equals(currentScreen)
-                || "assessment".equals(currentScreen) || "owned_preview".equals(currentScreen);
+                || "assessment".equals(currentScreen) || "owned_preview".equals(currentScreen)
+                || "audit".equals(currentScreen);
         if (onHome) home.setBackgroundColor(SELECTED);
         home.addView(onHome ? colorBar() : gap(dp(7)), new LinearLayout.LayoutParams(dp(7), -1));
         home.addView(gap(dp(24)));
@@ -323,6 +338,20 @@ public final class MainActivity extends Activity {
         } catch (IllegalStateException error) {
             Toast.makeText(this, "테스트 알림을 삭제하지 못했습니다.", Toast.LENGTH_LONG).show();
         }
+    }
+
+    private boolean recordPrivacyAttempt(boolean allowed) {
+        if (!controller.isRequested()) return true;
+        boolean saved = privacyAudit.record(allowed);
+        if (!saved) Toast.makeText(this, "접근 기록을 저장하지 못했습니다.", Toast.LENGTH_LONG).show();
+        return saved;
+    }
+
+    private void clearPrivacyAudit() {
+        if (!privacyAudit.clear()) {
+            Toast.makeText(this, "접근 기록을 삭제하지 못했습니다.", Toast.LENGTH_LONG).show();
+        }
+        render();
     }
 
     private void navigateTo(String target) {
@@ -504,6 +533,9 @@ public final class MainActivity extends Activity {
         TextView preview = action("앱 내부 예시 보호 확인  ›", 20);
         preview.setOnClickListener(v -> { currentScreen = "owned_preview"; render(); });
         body.addView(preview);
+        TextView audit = action("앱 접근 확인 기록  ›", 20);
+        audit.setOnClickListener(v -> { currentScreen = "audit"; render(); });
+        body.addView(audit);
     }
 
     private void addCompactSummary(LinearLayout body) {

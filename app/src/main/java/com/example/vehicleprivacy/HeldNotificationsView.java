@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Predicate;
 
 /** Shows only masked rows; opening content requires confirmed protection and parking states. */
 public final class HeldNotificationsView {
@@ -34,6 +35,7 @@ public final class HeldNotificationsView {
     private final Runnable onBack;
     private final Runnable onCreateTest;
     private final Runnable onClearTests;
+    private final Predicate<Boolean> onAuditAttempt;
     private final LinearLayout root;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final DisclosureGate.Listener gateListener = this::onAccessChanged;
@@ -45,7 +47,7 @@ public final class HeldNotificationsView {
     public HeldNotificationsView(Activity activity, float scale, List<HeldNotification> items,
                                  DisclosureGate gate,
                                  boolean storageProblem, Runnable onBack, Runnable onCreateTest,
-                                 Runnable onClearTests) {
+                                 Runnable onClearTests, Predicate<Boolean> onAuditAttempt) {
         this.activity = activity;
         this.scale = scale;
         this.items = items == null ? Collections.emptyList() : new ArrayList<>(items);
@@ -54,6 +56,7 @@ public final class HeldNotificationsView {
         this.onBack = onBack;
         this.onCreateTest = onCreateTest;
         this.onClearTests = onClearTests;
+        this.onAuditAttempt = Objects.requireNonNull(onAuditAttempt);
         root = new LinearLayout(activity) {
             @Override protected void onAttachedToWindow() {
                 super.onAttachedToWindow();
@@ -227,6 +230,7 @@ public final class HeldNotificationsView {
         if (closed || !listening) return;
         // Gate state is revalidated on the main thread immediately before rendering.
         if (storageProblem || !gate.refresh()) {
+            onAuditAttempt.test(false);
             new AlertDialog.Builder(activity).setTitle("내용을 확인할 수 없습니다")
                     .setMessage(blockedReason())
                     .setPositiveButton("확인", null).show();
@@ -236,12 +240,19 @@ public final class HeldNotificationsView {
         String source = item.getSourceIfAllowed(gate).orElse(null);
         String body = item.getBodyIfAllowed(gate).orElse(null);
         if (source == null || body == null) {
+            onAuditAttempt.test(false);
             new AlertDialog.Builder(activity).setTitle("내용을 확인할 수 없습니다")
                     .setMessage("알림 내용을 불러올 수 없습니다.")
                     .setPositiveButton("확인", null).show();
             return;
         }
         if (!gate.refresh()) return;
+        if (!onAuditAttempt.test(true)) {
+            new AlertDialog.Builder(activity).setTitle("내용을 확인할 수 없습니다")
+                    .setMessage("접근 기록을 저장하지 못해 내용을 열지 않았습니다.")
+                    .setPositiveButton("확인", null).show();
+            return;
+        }
         dismissDetail();
         AlertDialog dialog = new AlertDialog.Builder(activity).setTitle("보관 알림")
                 .setMessage("출처: " + source + "\n\n" + body)
