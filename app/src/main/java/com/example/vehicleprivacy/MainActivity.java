@@ -57,6 +57,7 @@ public final class MainActivity extends Activity {
     private TestNotificationRepository testNotifications;
     private PrivacyAuditLog privacyAudit;
     private ExamplePhotoApprovals examplePhotoApprovals;
+    private DisclosureDemoView disclosureDemo;
     private boolean detailsOpen;
     private float scale;
 
@@ -97,6 +98,7 @@ public final class MainActivity extends Activity {
             if ("utterance_check".equals(restoredScreen)) currentScreen = "utterance_check";
             if ("media_demo".equals(restoredScreen)) currentScreen = "media_demo";
             if ("example_photos".equals(restoredScreen)) currentScreen = "example_photos";
+            if ("disclosure_demo".equals(restoredScreen)) currentScreen = "disclosure_demo";
             if ("rule_draft".equals(restoredScreen)) {
                 String id = savedInstanceState.getString("rule_draft_id");
                 for (Preset preset : presets.getPresets()) {
@@ -170,6 +172,10 @@ public final class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if ("disclosure_demo".equals(currentScreen)) {
+            navigateTo("home");
+            return;
+        }
         if ("settings_photos".equals(currentScreen)) {
             returnFromExamplePhotos();
             return;
@@ -234,6 +240,10 @@ public final class MainActivity extends Activity {
     }
 
     private void render() {
+        if (disclosureDemo != null) {
+            disclosureDemo.close();
+            disclosureDemo = null;
+        }
         if (mediaDemo != null) {
             mediaDemo.close();
             mediaDemo = null;
@@ -268,6 +278,9 @@ public final class MainActivity extends Activity {
 
         if ("presets".equals(currentScreen)) {
             root.addView(presetList(), new LinearLayout.LayoutParams(0, -1, 1f));
+        } else if ("disclosure_demo".equals(currentScreen)) {
+            disclosureDemo = new DisclosureDemoView(this, scale, () -> navigateTo("home"));
+            root.addView(disclosureDemo.getView(), new LinearLayout.LayoutParams(0, -1, 1f));
         } else if ("settings_photos".equals(currentScreen)) {
             root.addView(new ApprovedExamplePhotosView(this, scale, examplePhotoApprovals,
                     controller.isRequested(), this::returnFromExamplePhotos).getView(),
@@ -339,7 +352,7 @@ public final class MainActivity extends Activity {
                 || "assessment".equals(currentScreen) || "owned_preview".equals(currentScreen)
                 || "audit".equals(currentScreen) || "utterance_check".equals(currentScreen)
                 || "rule_draft".equals(currentScreen) || "media_demo".equals(currentScreen)
-                || "example_photos".equals(currentScreen);
+                || "example_photos".equals(currentScreen) || "disclosure_demo".equals(currentScreen);
         if (onHome) home.setBackgroundColor(SELECTED);
         home.addView(onHome ? colorBar() : gap(dp(7)), new LinearLayout.LayoutParams(dp(7), -1));
         home.addView(gap(dp(24)));
@@ -514,6 +527,7 @@ public final class MainActivity extends Activity {
         if (vehiclePreview != null) vehiclePreview.cancelHold();
         if (utteranceCheckView != null) utteranceCheckView.clearSensitiveInput();
         if (ruleDraftView != null) ruleDraftView.clearSensitiveInput();
+        if (disclosureDemo != null) disclosureDemo.close();
         if (mediaDemo != null) { mediaDemo.close(); mediaDemo = null; }
         if (carUxParkingVeto != null) {
             try { carUxParkingVeto.stop(); }
@@ -675,6 +689,9 @@ public final class MainActivity extends Activity {
         TextView audit = action("앱 접근 확인 기록  ›", 20);
         audit.setOnClickListener(v -> { currentScreen = "audit"; render(); });
         body.addView(audit);
+        TextView disclosure = action("알림 공개 조건 시뮬레이션  ›", 20);
+        disclosure.setOnClickListener(v -> navigateTo("disclosure_demo"));
+        body.addView(disclosure);
         TextView utterance = action("발화 전 문장 점검  ›", 20);
         utterance.setOnClickListener(v -> navigateTo("utterance_check"));
         body.addView(utterance);
