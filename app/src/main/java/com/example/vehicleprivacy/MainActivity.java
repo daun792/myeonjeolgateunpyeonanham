@@ -99,6 +99,7 @@ public final class MainActivity extends Activity {
             if ("media_demo".equals(restoredScreen)) currentScreen = "media_demo";
             if ("example_photos".equals(restoredScreen)) currentScreen = "example_photos";
             if ("disclosure_demo".equals(restoredScreen)) currentScreen = "disclosure_demo";
+            if ("passenger_demo".equals(restoredScreen)) currentScreen = "passenger_demo";
             if ("rule_draft".equals(restoredScreen)) {
                 String id = savedInstanceState.getString("rule_draft_id");
                 for (Preset preset : presets.getPresets()) {
@@ -172,6 +173,10 @@ public final class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if ("passenger_demo".equals(currentScreen)) {
+            navigateTo("home");
+            return;
+        }
         if ("disclosure_demo".equals(currentScreen)) {
             navigateTo("home");
             return;
@@ -278,6 +283,10 @@ public final class MainActivity extends Activity {
 
         if ("presets".equals(currentScreen)) {
             root.addView(presetList(), new LinearLayout.LayoutParams(0, -1, 1f));
+        } else if ("passenger_demo".equals(currentScreen)) {
+            root.addView(new PassengerPreviewDemoView(this, scale, presets.getSelected(),
+                    controller.isRequested(), () -> navigateTo("home")).getView(),
+                    new LinearLayout.LayoutParams(0, -1, 1f));
         } else if ("disclosure_demo".equals(currentScreen)) {
             disclosureDemo = new DisclosureDemoView(this, scale, () -> navigateTo("home"));
             root.addView(disclosureDemo.getView(), new LinearLayout.LayoutParams(0, -1, 1f));
@@ -352,7 +361,8 @@ public final class MainActivity extends Activity {
                 || "assessment".equals(currentScreen) || "owned_preview".equals(currentScreen)
                 || "audit".equals(currentScreen) || "utterance_check".equals(currentScreen)
                 || "rule_draft".equals(currentScreen) || "media_demo".equals(currentScreen)
-                || "example_photos".equals(currentScreen) || "disclosure_demo".equals(currentScreen);
+                || "example_photos".equals(currentScreen) || "disclosure_demo".equals(currentScreen)
+                || "passenger_demo".equals(currentScreen);
         if (onHome) home.setBackgroundColor(SELECTED);
         home.addView(onHome ? colorBar() : gap(dp(7)), new LinearLayout.LayoutParams(dp(7), -1));
         home.addView(gap(dp(24)));
@@ -692,6 +702,9 @@ public final class MainActivity extends Activity {
         TextView disclosure = action("알림 공개 조건 시뮬레이션  ›", 20);
         disclosure.setOnClickListener(v -> navigateTo("disclosure_demo"));
         body.addView(disclosure);
+        TextView passenger = action("동승자 알림 가림 시뮬레이션  ›", 20);
+        passenger.setOnClickListener(v -> navigateTo("passenger_demo"));
+        body.addView(passenger);
         TextView utterance = action("발화 전 문장 점검  ›", 20);
         utterance.setOnClickListener(v -> navigateTo("utterance_check"));
         body.addView(utterance);
