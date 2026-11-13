@@ -9,6 +9,7 @@ import android.graphics.Typeface;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -39,6 +40,7 @@ public final class MainActivity extends Activity {
 
     private SharedPreferences preferences;
     private ProtectionController controller;
+    private ProtectionSwipe protectionSwipe;
     private PresetRepository presets;
     private Preset editingPreset;
     private PresetSettingsView settingsView;
@@ -552,6 +554,7 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
+        if (protectionSwipe != null) protectionSwipe.cancel();
         if (vehiclePreview != null) vehiclePreview.cancelHold();
         if (utteranceCheckView != null) utteranceCheckView.clearSensitiveInput();
         if (ruleDraftView != null) ruleDraftView.clearSensitiveInput();
@@ -588,6 +591,7 @@ public final class MainActivity extends Activity {
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
+        if (!hasFocus && protectionSwipe != null) protectionSwipe.cancel();
         if (!hasFocus && vehiclePreview != null) vehiclePreview.cancelHold();
         if (!hasFocus && demoInbox != null) demoInbox.close();
         if (hasFocus && disclosureGate != null) disclosureGate.refresh();
@@ -660,6 +664,7 @@ public final class MainActivity extends Activity {
         }
         modeRow.addView(protectionSwitch());
         body.addView(modeRow, new LinearLayout.LayoutParams(-1, dp(72)));
+        body.addView(protectionSwipeArea(), new LinearLayout.LayoutParams(-1, dp(64)));
 
         if (!controller.isRequested()) {
             body.addView(space(dp(28)));
@@ -748,6 +753,7 @@ public final class MainActivity extends Activity {
         mode.addView(requested, new LinearLayout.LayoutParams(0, -2, 1));
         mode.addView(protectionSwitch());
         body.addView(mode, new LinearLayout.LayoutParams(-1, dp(70)));
+        body.addView(protectionSwipeArea(), new LinearLayout.LayoutParams(-1, dp(64)));
         body.addView(divider(false), new LinearLayout.LayoutParams(-1, dp(1)));
         body.addView(space(dp(28)));
         body.addView(label("선택한 프리셋", 20, MUTED, false));
@@ -834,6 +840,46 @@ public final class MainActivity extends Activity {
         return count == 0 ? "선택한 보호 대상 없음" : count + "개 대상 연동 전";
     }
 
+    private void setProtectionRequest(boolean requested) {
+        if (controller.isRequested() == requested) return;
+        controller.setRequested(requested);
+        preferences.edit().putBoolean(REQUEST_KEY, requested).apply();
+        if (!requested) detailsOpen = false;
+        render();
+    }
+
+    /** Dedicated app-only swipe area; the normal accessible switch stays available. */
+    private View protectionSwipeArea() {
+        TextView area = label("← 밀어서 요청 끄기     ·     밀어서 요청 켜기 →", 17, ACCENT, true);
+        area.setGravity(Gravity.CENTER);
+        area.setPadding(dp(12), dp(8), dp(12), dp(8));
+        area.setContentDescription("보호 요청 제스처 영역. 왼쪽으로 밀면 끄고, 오른쪽으로 밀면 켭니다. 스위치도 사용할 수 있습니다.");
+        area.setBackgroundColor(SELECTED);
+        ProtectionSwipe swipe = new ProtectionSwipe(dp(110), dp(48), 2000L);
+        protectionSwipe = swipe;
+        area.setOnTouchListener((view, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    swipe.down(event.getX(), event.getY(), event.getEventTime(), event.getPointerCount());
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    swipe.move(event.getX(), event.getY(), event.getPointerCount());
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    Boolean requested = swipe.up(event.getX(), event.getY(), event.getEventTime(), event.getPointerCount());
+                    if (requested != null && hasWindowFocus()) setProtectionRequest(requested);
+                    return true;
+                case MotionEvent.ACTION_CANCEL:
+                case MotionEvent.ACTION_POINTER_DOWN:
+                case MotionEvent.ACTION_POINTER_UP:
+                    swipe.cancel();
+                    return true;
+                default: return true;
+            }
+        });
+        return area;
+    }
+
     private Switch protectionSwitch() {
         Switch control = new Switch(this);
         control.setId(R.id.protection_switch);
@@ -844,12 +890,7 @@ public final class MainActivity extends Activity {
         int[][] states = new int[][] {new int[] {android.R.attr.state_checked}, new int[] {}};
         control.setTrackTintList(new ColorStateList(states, new int[] {ACCENT, Color.rgb(78, 88, 96)}));
         control.setThumbTintList(ColorStateList.valueOf(Color.WHITE));
-        control.setOnCheckedChangeListener((button, checked) -> {
-            controller.setRequested(checked);
-            preferences.edit().putBoolean(REQUEST_KEY, checked).apply();
-            if (!checked) detailsOpen = false;
-            render();
-        });
+        control.setOnCheckedChangeListener((button, checked) -> setProtectionRequest(checked));
         return control;
     }
 
