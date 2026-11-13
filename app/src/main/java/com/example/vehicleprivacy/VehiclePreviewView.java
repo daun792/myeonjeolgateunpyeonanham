@@ -33,16 +33,21 @@ public final class VehiclePreviewView {
     private final Activity activity;
     private final float scale;
     private final TemporaryReveal model;
+    private final PhotoPreviewPolicy photoPolicy;
     private final Runnable onBack;
     private final TextView[] rows = new TextView[AREAS.length];
+    private final TextView[] photoSymbols = new TextView[ExamplePhotoApprovals.Photo.values().length];
+    private final TextView[] photoLabels = new TextView[ExamplePhotoApprovals.Photo.values().length];
     private final LinearLayout root;
     private TextView holdButton;
     private boolean gestureCancelled;
 
-    public VehiclePreviewView(Activity activity, float scale, TemporaryReveal model, Runnable onBack) {
+    public VehiclePreviewView(Activity activity, float scale, TemporaryReveal model,
+                              PhotoPreviewPolicy photoPolicy, Runnable onBack) {
         this.activity = activity;
         this.scale = scale;
         this.model = model;
+        this.photoPolicy = java.util.Objects.requireNonNull(photoPolicy, "photoPolicy");
         this.onBack = onBack;
         root = new LinearLayout(activity) {
             @Override public void onWindowFocusChanged(boolean hasWindowFocus) {
@@ -128,7 +133,7 @@ public final class VehiclePreviewView {
         holdButton.setMinHeight(dp(90));
         holdButton.setClickable(true);
         holdButton.setFocusable(true);
-        holdButton.setContentDescription("잠시 보기, 선택한 예시 항목을 누르고 있는 동안만 공개");
+        holdButton.setContentDescription("잠시 보기, 선택한 항목을 누르는 동안 공개하고 사진 허용 목록은 유지");
         holdButton.setOnTouchListener(this::handleTouch);
         holdButton.setOnKeyListener(this::handleKey);
         holdButton.setOnFocusChangeListener((view, focused) -> { if (!focused) cancelHold(); });
@@ -144,11 +149,39 @@ public final class VehiclePreviewView {
         boolean anySelected = false;
         for (TemporaryReveal.Area area : AREAS) anySelected |= model.isSelected(area);
         TextView help = label(anySelected
-                ? "프리셋에서 선택한 범위만 공개됩니다. 손을 떼거나 화면을 벗어나면 다시 가립니다."
-                : "선택된 공개 범위가 없습니다. 프리셋의 잠시 보기 설정에서 선택해 주세요.",
+                ? "선택한 일반 예시는 누르는 동안만 공개됩니다. 사진은 아래 허용 목록을 따릅니다."
+                : "선택된 잠시 보기 범위가 없습니다. 사진은 아래 허용 목록을 따릅니다.",
                 15, MUTED, false);
         help.setPadding(0, dp(15), 0, 0);
         right.addView(help);
+
+        TextView photoHeading = label("앱의 가상 사진 예시", 20, ACCENT, true);
+        photoHeading.setPadding(0, dp(18), 0, dp(8));
+        right.addView(photoHeading);
+        TextView photoSettings = label("선택 프리셋: " + photoPolicy.getPresetName()
+                + " · 보호 요청 " + (photoPolicy.isProtectionRequested() ? "켜짐" : "꺼짐")
+                + " · 기본 화면 보호 " + (photoPolicy.isScreenProtectionEnabled() ? "켜짐" : "꺼짐"),
+                15, MUTED, false);
+        right.addView(photoSettings);
+        TextView photoHelp = label(photoPolicy.isProtectScreenRequested()
+                ? "기본 화면 보호 요청 중에는 허용한 예시만 표시합니다. 잠시 보기도 허용되지 않은 사진은 표시하지 않습니다."
+                : "기본 화면 보호 요청이 꺼져 예시 사진을 표시합니다. 허용 목록에 오류가 있으면 가립니다.",
+                15, MUTED, false);
+        right.addView(photoHelp);
+        right.addView(label("프리셋 설정 저장 후 이 화면에 다시 들어오면 반영됩니다.", 15, MUTED, false));
+        for (ExamplePhotoApprovals.Photo photo : ExamplePhotoApprovals.Photo.values()) {
+            int index = photo.ordinal();
+            LinearLayout item = row();
+            item.setGravity(Gravity.CENTER_VERTICAL);
+            photoSymbols[index] = label("", 22, TEXT, true);
+            photoSymbols[index].setGravity(Gravity.CENTER);
+            photoSymbols[index].setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            item.addView(photoSymbols[index], new LinearLayout.LayoutParams(dp(48), dp(48)));
+            photoLabels[index] = label("", 18, TEXT, true);
+            photoLabels[index].setPadding(dp(12), 0, 0, 0);
+            item.addView(photoLabels[index], new LinearLayout.LayoutParams(0, -2, 1));
+            right.addView(item, new LinearLayout.LayoutParams(-1, dp(64)));
+        }
     }
 
     private boolean handleTouch(View view, MotionEvent event) {
@@ -197,15 +230,46 @@ public final class VehiclePreviewView {
     private void updateLabels() {
         for (int i = 0; i < AREAS.length; i++) {
             if (rows[i] == null) continue;
-            String text = model.isRevealed(AREAS[i])
+            String text = AREAS[i] == TemporaryReveal.Area.SCREEN_PHOTO
+                    ? (photoPolicy.isProtectScreenRequested()
+                        ? "기본 화면 사진: 아래 가상 사진 허용 목록 적용"
+                        : "기본 화면 사진: 아래 가상 사진 표시 상태 확인")
+                    : model.isRevealed(AREAS[i])
                     ? LABELS[i] + ": " + EXAMPLES[i] + " (예시)"
                     : LABELS[i] + " 가려짐";
             rows[i].setText(text);
             rows[i].setContentDescription(text);
         }
+        for (ExamplePhotoApprovals.Photo photo : ExamplePhotoApprovals.Photo.values()) {
+            int index = photo.ordinal();
+            if (photoSymbols[index] == null || photoLabels[index] == null) continue;
+            boolean visible = photoPolicy.isVisible(photo);
+            photoSymbols[index].setText(visible ? photoSymbol(photo) : "■");
+            photoSymbols[index].setBackground(rounded(visible ? photoColor(photo)
+                    : Color.rgb(61, 71, 78), DIVIDER));
+            String label = photoPolicy.label(photo);
+            photoLabels[index].setText(label);
+            photoLabels[index].setContentDescription(label);
+        }
         if (holdButton != null) holdButton.setText(model.isHolding()
-                ? "◉   잠시 보기 중\n      손을 떼면 다시 가려집니다"
-                : "◉   잠시 보기\n      누르고 있는 동안만 공개");
+                ? "◉   잠시 보기 중\n      손을 떼면 선택한 예시를 다시 가립니다"
+                : "◉   잠시 보기\n      누르고 있는 동안 선택한 예시 공개");
+    }
+
+    private static String photoSymbol(ExamplePhotoApprovals.Photo photo) {
+        switch (photo) {
+            case SKY: return "☀";
+            case GARDEN: return "✿";
+            default: return "●";
+        }
+    }
+
+    private static int photoColor(ExamplePhotoApprovals.Photo photo) {
+        switch (photo) {
+            case SKY: return Color.rgb(51, 117, 145);
+            case GARDEN: return Color.rgb(57, 111, 83);
+            default: return Color.rgb(120, 85, 70);
+        }
     }
 
     private GradientDrawable rounded(int color, int stroke) {

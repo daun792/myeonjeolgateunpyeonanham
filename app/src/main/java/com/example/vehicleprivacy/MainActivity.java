@@ -266,8 +266,11 @@ public final class MainActivity extends Activity {
             heldNotificationsView = null;
         }
         if ("simulation".equals(currentScreen)) {
+            Preset selected = presets.getSelected();
             vehiclePreview = new VehiclePreviewView(this, scale,
-                    new TemporaryReveal(presets.getSelected()), () -> navigateTo("home"));
+                    new TemporaryReveal(selected),
+                    new PhotoPreviewPolicy(selected, controller.isRequested(), examplePhotoApprovals),
+                    () -> navigateTo("home"));
             setContentView(vehiclePreview.getView());
             return;
         }
