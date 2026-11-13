@@ -58,6 +58,7 @@ public final class MainActivity extends Activity {
     private PrivacyAuditLog privacyAudit;
     private ExamplePhotoApprovals examplePhotoApprovals;
     private DisclosureDemoView disclosureDemo;
+    private DemoInboxView demoInbox;
     private boolean detailsOpen;
     private float scale;
 
@@ -99,6 +100,7 @@ public final class MainActivity extends Activity {
             if ("media_demo".equals(restoredScreen)) currentScreen = "media_demo";
             if ("example_photos".equals(restoredScreen)) currentScreen = "example_photos";
             if ("disclosure_demo".equals(restoredScreen)) currentScreen = "disclosure_demo";
+            if ("demo_inbox".equals(restoredScreen)) currentScreen = "demo_inbox";
             if ("passenger_demo".equals(restoredScreen)) currentScreen = "passenger_demo";
             if ("rule_draft".equals(restoredScreen)) {
                 String id = savedInstanceState.getString("rule_draft_id");
@@ -173,6 +175,10 @@ public final class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if ("demo_inbox".equals(currentScreen)) {
+            navigateTo("notifications");
+            return;
+        }
         if ("passenger_demo".equals(currentScreen)) {
             navigateTo("home");
             return;
@@ -245,6 +251,10 @@ public final class MainActivity extends Activity {
     }
 
     private void render() {
+        if (demoInbox != null) {
+            demoInbox.close();
+            demoInbox = null;
+        }
         if (disclosureDemo != null) {
             disclosureDemo.close();
             disclosureDemo = null;
@@ -286,6 +296,9 @@ public final class MainActivity extends Activity {
 
         if ("presets".equals(currentScreen)) {
             root.addView(presetList(), new LinearLayout.LayoutParams(0, -1, 1f));
+        } else if ("demo_inbox".equals(currentScreen)) {
+            demoInbox = new DemoInboxView(this, scale, () -> navigateTo("notifications"));
+            root.addView(demoInbox.getView(), new LinearLayout.LayoutParams(0, -1, 1f));
         } else if ("passenger_demo".equals(currentScreen)) {
             root.addView(new PassengerPreviewDemoView(this, scale, presets.getSelected(),
                     controller.isRequested(), () -> navigateTo("home")).getView(),
@@ -331,7 +344,7 @@ public final class MainActivity extends Activity {
                     testNotifications.getNotifications(), disclosureGate,
                     testNotifications.hasCorruptData(), () -> navigateTo("home"),
                     this::createTestNotification, this::clearTestNotifications,
-                    this::recordPrivacyAttempt);
+                    () -> navigateTo("demo_inbox"), this::recordPrivacyAttempt);
             root.addView(heldNotificationsView.getView(), new LinearLayout.LayoutParams(0, -1, 1f));
         } else if ("settings".equals(currentScreen)) {
             settingsView = new PresetSettingsView(this, scale, editingPreset,
@@ -365,7 +378,7 @@ public final class MainActivity extends Activity {
                 || "audit".equals(currentScreen) || "utterance_check".equals(currentScreen)
                 || "rule_draft".equals(currentScreen) || "media_demo".equals(currentScreen)
                 || "example_photos".equals(currentScreen) || "disclosure_demo".equals(currentScreen)
-                || "passenger_demo".equals(currentScreen);
+                || "passenger_demo".equals(currentScreen) || "demo_inbox".equals(currentScreen);
         if (onHome) home.setBackgroundColor(SELECTED);
         home.addView(onHome ? colorBar() : gap(dp(7)), new LinearLayout.LayoutParams(dp(7), -1));
         home.addView(gap(dp(24)));
@@ -541,6 +554,7 @@ public final class MainActivity extends Activity {
         if (utteranceCheckView != null) utteranceCheckView.clearSensitiveInput();
         if (ruleDraftView != null) ruleDraftView.clearSensitiveInput();
         if (disclosureDemo != null) disclosureDemo.close();
+        if (demoInbox != null) demoInbox.close();
         if (mediaDemo != null) { mediaDemo.close(); mediaDemo = null; }
         if (carUxParkingVeto != null) {
             try { carUxParkingVeto.stop(); }
@@ -573,6 +587,7 @@ public final class MainActivity extends Activity {
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (!hasFocus && vehiclePreview != null) vehiclePreview.cancelHold();
+        if (!hasFocus && demoInbox != null) demoInbox.close();
         if (hasFocus && disclosureGate != null) disclosureGate.refresh();
     }
 

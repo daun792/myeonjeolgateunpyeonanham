@@ -35,6 +35,7 @@ public final class HeldNotificationsView {
     private final Runnable onBack;
     private final Runnable onCreateTest;
     private final Runnable onClearTests;
+    private final Runnable onOpenDemo;
     private final Predicate<Boolean> onAuditAttempt;
     private final LinearLayout root;
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -47,7 +48,7 @@ public final class HeldNotificationsView {
     public HeldNotificationsView(Activity activity, float scale, List<HeldNotification> items,
                                  DisclosureGate gate,
                                  boolean storageProblem, Runnable onBack, Runnable onCreateTest,
-                                 Runnable onClearTests, Predicate<Boolean> onAuditAttempt) {
+                                 Runnable onClearTests, Runnable onOpenDemo, Predicate<Boolean> onAuditAttempt) {
         this.activity = activity;
         this.scale = scale;
         this.items = items == null ? Collections.emptyList() : new ArrayList<>(items);
@@ -56,6 +57,7 @@ public final class HeldNotificationsView {
         this.onBack = onBack;
         this.onCreateTest = onCreateTest;
         this.onClearTests = onClearTests;
+        this.onOpenDemo = Objects.requireNonNull(onOpenDemo);
         this.onAuditAttempt = Objects.requireNonNull(onAuditAttempt);
         root = new LinearLayout(activity) {
             @Override protected void onAttachedToWindow() {
@@ -165,6 +167,10 @@ public final class HeldNotificationsView {
                 16, MUTED, false);
         note.setPadding(0, 0, 0, dp(16));
         root.addView(note);
+        TextView demo = action("가상 보관함 상세 보기 시연  ›");
+        demo.setContentDescription("가상 보관함 상세 보기 시연 열기");
+        demo.setOnClickListener(v -> onOpenDemo.run());
+        root.addView(demo, new LinearLayout.LayoutParams(-2, dp(52)));
 
         ScrollView scroll = new ScrollView(activity);
         scroll.setFillViewport(false);
