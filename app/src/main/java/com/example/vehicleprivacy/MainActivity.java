@@ -112,7 +112,7 @@ public final class MainActivity extends Activity {
                     break;
                 }
             }
-            if ("settings".equals(restoredScreen)) {
+            if ("settings".equals(restoredScreen) || "settings_photos".equals(restoredScreen)) {
                 String editId = savedInstanceState.getString("editing_id");
                 for (Preset preset : presets.getPresets()) {
                     if (preset.getId().equals(editId)) {
@@ -123,7 +123,7 @@ public final class MainActivity extends Activity {
                             for (String key : draft.keySet()) values.put(key, draft.getString(key));
                             editingPreset.replaceValues(values);
                         }
-                        currentScreen = "settings";
+                        currentScreen = restoredScreen;
                         restoredSettingsTab = savedInstanceState.getInt("settings_tab", 0);
                         restoredSettingsDetail = savedInstanceState.getString("settings_detail");
                         break;
@@ -141,16 +141,20 @@ public final class MainActivity extends Activity {
     protected void onSaveInstanceState(Bundle state) {
         state.putBoolean("details_open", detailsOpen);
         state.putString("current_screen", currentScreen);
-        if ("settings".equals(currentScreen) && editingPreset != null) {
+        if (("settings".equals(currentScreen) || "settings_photos".equals(currentScreen))
+                && editingPreset != null) {
             state.putString("editing_id", editingPreset.getId());
             Bundle draft = new Bundle();
             for (Map.Entry<String, String> entry : editingPreset.getValues().entrySet()) {
                 draft.putString(entry.getKey(), entry.getValue());
             }
             state.putBundle("editing_values", draft);
-            if (settingsView != null) {
+            if ("settings".equals(currentScreen) && settingsView != null) {
                 state.putInt("settings_tab", settingsView.getTab());
                 state.putString("settings_detail", settingsView.getDetail());
+            } else {
+                state.putInt("settings_tab", restoredSettingsTab);
+                state.putString("settings_detail", restoredSettingsDetail);
             }
         }
         if ("rule_draft".equals(currentScreen) && ruleDraft != null) {
@@ -166,6 +170,10 @@ public final class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if ("settings_photos".equals(currentScreen)) {
+            returnFromExamplePhotos();
+            return;
+        }
         if ("example_photos".equals(currentScreen)) {
             navigateTo("home");
             return;
@@ -260,6 +268,10 @@ public final class MainActivity extends Activity {
 
         if ("presets".equals(currentScreen)) {
             root.addView(presetList(), new LinearLayout.LayoutParams(0, -1, 1f));
+        } else if ("settings_photos".equals(currentScreen)) {
+            root.addView(new ApprovedExamplePhotosView(this, scale, examplePhotoApprovals,
+                    controller.isRequested(), this::returnFromExamplePhotos).getView(),
+                    new LinearLayout.LayoutParams(0, -1, 1f));
         } else if ("example_photos".equals(currentScreen)) {
             root.addView(new ApprovedExamplePhotosView(this, scale, examplePhotoApprovals,
                     controller.isRequested(), () -> navigateTo("home")).getView(),
@@ -300,7 +312,7 @@ public final class MainActivity extends Activity {
             settingsView = new PresetSettingsView(this, scale, editingPreset,
                     () -> { presets.save(editingPreset); currentScreen = "presets"; render(); },
                     () -> { currentScreen = "presets"; render(); },
-                    () -> navigateTo("notifications"));
+                    () -> navigateTo("notifications"), this::openExamplePhotosFromSettings);
             settingsView.restoreLocation(restoredSettingsTab, restoredSettingsDetail);
             restoredSettingsTab = 0;
             restoredSettingsDetail = null;
@@ -448,10 +460,34 @@ public final class MainActivity extends Activity {
         return true;
     }
 
+    private void openExamplePhotosFromSettings() {
+        if (!"settings".equals(currentScreen) || settingsView == null || editingPreset == null) return;
+        restoredSettingsTab = settingsView.getTab();
+        restoredSettingsDetail = settingsView.getDetail();
+        currentScreen = "settings_photos";
+        render();
+    }
+
+    private void returnFromExamplePhotos() {
+        if (!"settings_photos".equals(currentScreen) || editingPreset == null) return;
+        currentScreen = "settings";
+        render();
+    }
+
     private void navigateTo(String target) {
         if (target.equals(currentScreen)) return;
-        Runnable change = () -> { currentScreen = target; detailsOpen = false; render(); };
-        if ("settings".equals(currentScreen) && hasUnsavedPresetChanges()) confirmDiscard(change);
+        Runnable change = () -> {
+            if ("settings".equals(currentScreen) || "settings_photos".equals(currentScreen)) {
+                editingPreset = null;
+                restoredSettingsTab = 0;
+                restoredSettingsDetail = null;
+            }
+            currentScreen = target;
+            detailsOpen = false;
+            render();
+        };
+        if (("settings".equals(currentScreen) || "settings_photos".equals(currentScreen))
+                && hasUnsavedPresetChanges()) confirmDiscard(change);
         else if ("rule_draft".equals(currentScreen) && hasUnsavedRuleChanges()) {
             confirmDiscard(() -> { ruleDraft = null; change.run(); });
         } else change.run();

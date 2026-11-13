@@ -28,18 +28,21 @@ public final class PresetSettingsView {
     private final Runnable onSave;
     private final Runnable onCancel;
     private final Runnable onOpenNotifications;
+    private final Runnable onOpenExamplePhotos;
     private final FrameLayout root;
     private int tab;
     private String detail = "";
 
     public PresetSettingsView(Activity activity, float scale, Preset preset,
-                              Runnable onSave, Runnable onCancel, Runnable onOpenNotifications) {
+                              Runnable onSave, Runnable onCancel, Runnable onOpenNotifications,
+                              Runnable onOpenExamplePhotos) {
         this.activity = activity;
         this.scale = scale;
         this.preset = preset;
         this.onSave = onSave;
         this.onCancel = onCancel;
         this.onOpenNotifications = onOpenNotifications;
+        this.onOpenExamplePhotos = onOpenExamplePhotos;
         this.root = new FrameLayout(activity);
         render();
     }
@@ -173,7 +176,7 @@ public final class PresetSettingsView {
                 heading(page, "기본 화면 보호");
                 page.addView(label("민감 정보 표시 방식", 20, TEXT, true));
                 radioChoice(page, "screen_mode", "hide", "가리기", "public", "공개 가능한 표현으로 바꾸기");
-                unavailable(page, "사진 승인 관리");
+                examplePhotosLink(page);
                 break;
             case "contact":
                 heading(page, "연락처 보호");
@@ -269,10 +272,16 @@ public final class PresetSettingsView {
         parent.addView(box, new LinearLayout.LayoutParams(-1, dp(62)));
         parent.addView(line(), new LinearLayout.LayoutParams(-1, dp(1)));
     }
-    private void unavailable(LinearLayout parent, String title) {
-        TextView item = label(title + " · 준비 중", 19, MUTED, false);
-        item.setGravity(Gravity.CENTER_VERTICAL);
-        parent.addView(item, new LinearLayout.LayoutParams(-1, dp(60)));
+    private void examplePhotosLink(LinearLayout parent) {
+        TextView link = label("가상 예시 사진 승인 관리  ›", 19, ACCENT, true);
+        link.setGravity(Gravity.CENTER_VERTICAL);
+        link.setMinHeight(dp(48));
+        link.setClickable(true);
+        link.setFocusable(true);
+        link.setContentDescription("가상 예시 사진 승인 관리");
+        link.setOnClickListener(v -> onOpenExamplePhotos.run());
+        parent.addView(link, new LinearLayout.LayoutParams(-1, dp(60)));
+        parent.addView(label("가상 예시 사진 허용 목록은 앱 공통이며 변경 즉시 저장됩니다.", 15, MUTED, false));
         parent.addView(line(), new LinearLayout.LayoutParams(-1, dp(1)));
     }
     private void notificationLink(LinearLayout parent) {
