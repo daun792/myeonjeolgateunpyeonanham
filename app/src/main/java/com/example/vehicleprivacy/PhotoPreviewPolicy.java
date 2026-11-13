@@ -29,6 +29,21 @@ public final class PhotoPreviewPolicy {
         return isVisible(photo) ? photo.getLabel() : "사진 가려짐";
     }
 
+    /** A hold adds detail only for a visible, explicitly approved fixed example. */
+    public String label(ExamplePhotoApprovals.Photo photo, TemporaryReveal reveal) {
+        Objects.requireNonNull(reveal, "reveal");
+        String baseline = label(photo);
+        if (!isVisible(photo) || !approvals.isApproved(photo)
+                || !reveal.isRevealed(TemporaryReveal.Area.SCREEN_PHOTO)) return baseline;
+        String detail;
+        switch (photo) {
+            case SKY: detail = "맑은 하늘 일러스트"; break;
+            case GARDEN: detail = "꽃이 핀 정원 일러스트"; break;
+            default: detail = "작은 동물 일러스트";
+        }
+        return baseline + " · 잠시 보기: " + detail;
+    }
+
     public boolean isProtectScreenRequested() { return protectScreen; }
     public boolean isProtectionRequested() { return protectionRequested; }
     public boolean isScreenProtectionEnabled() { return screenProtectionEnabled; }

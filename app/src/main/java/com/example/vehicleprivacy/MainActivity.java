@@ -308,11 +308,13 @@ public final class MainActivity extends Activity {
             root.addView(disclosureDemo.getView(), new LinearLayout.LayoutParams(0, -1, 1f));
         } else if ("settings_photos".equals(currentScreen)) {
             root.addView(new ApprovedExamplePhotosView(this, scale, examplePhotoApprovals,
-                    controller.isRequested(), this::returnFromExamplePhotos).getView(),
+                    new PhotoPreviewPolicy(presets.getSelected(), controller.isRequested(),
+                            examplePhotoApprovals).isProtectScreenRequested(), this::returnFromExamplePhotos).getView(),
                     new LinearLayout.LayoutParams(0, -1, 1f));
         } else if ("example_photos".equals(currentScreen)) {
             root.addView(new ApprovedExamplePhotosView(this, scale, examplePhotoApprovals,
-                    controller.isRequested(), () -> navigateTo("home")).getView(),
+                    new PhotoPreviewPolicy(presets.getSelected(), controller.isRequested(),
+                            examplePhotoApprovals).isProtectScreenRequested(), () -> navigateTo("home")).getView(),
                     new LinearLayout.LayoutParams(0, -1, 1f));
         } else if ("media_demo".equals(currentScreen)) {
             mediaDemo = new OwnedMediaDemoView(this, scale, presets.getSelected(), () -> navigateTo("home"));

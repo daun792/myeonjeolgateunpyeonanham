@@ -65,14 +65,14 @@ public final class ApprovedExamplePhotosView {
         root.addView(heading, new LinearLayout.LayoutParams(-1, dp(65)));
         root.addView(divider(), new LinearLayout.LayoutParams(-1, dp(1)));
 
-        TextView note = label("앱 공통 허용 목록이며 변경 즉시 저장됩니다. 이 앱에 그린 가상 예시만 관리합니다. 실제 사진·외부 앨범이나 차량 기본 화면은 연결되지 않았습니다.",
+        TextView note = label("앱 공통 허용 목록이며 변경 즉시 저장됩니다. 이 앱의 가상 예시만 관리합니다. 표시 상태는 현재 선택한 저장된 프리셋 기준입니다. 편집 중인 초안은 저장하고 해당 프리셋을 선택한 뒤 반영됩니다. 실제 사진·외부 앨범이나 차량 기본 화면은 연결되지 않았습니다.",
                 16, MUTED, false);
         note.setPadding(0, dp(14), 0, dp(10));
         root.addView(note);
         String message = approvals.hasStorageError()
                 ? "허용 목록을 읽거나 저장하지 못해 예시를 모두 가립니다."
-                : protectionOn ? "보호 요청 중에는 허용한 예시만 표시합니다."
-                : "현재 보호 요청이 꺼져 예시 전체가 표시됩니다.";
+                : protectionOn ? "현재 선택 프리셋의 기본 화면 보호 요청 중에는 허용한 예시만 표시합니다."
+                : "현재 선택 프리셋의 기본 화면 보호 요청이 꺼져 예시 전체가 표시됩니다.";
         TextView status = label(message, 18, approvals.hasStorageError() ? MUTED : ACCENT, true);
         status.setPadding(0, 0, 0, dp(10));
         root.addView(status);

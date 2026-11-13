@@ -133,7 +133,7 @@ public final class VehiclePreviewView {
         holdButton.setMinHeight(dp(90));
         holdButton.setClickable(true);
         holdButton.setFocusable(true);
-        holdButton.setContentDescription("잠시 보기, 선택한 항목을 누르는 동안 공개하고 사진 허용 목록은 유지");
+        holdButton.setContentDescription("잠시 보기, 선택한 항목은 누르는 동안 공개하고 승인 사진의 상세만 잠시 표시");
         holdButton.setOnTouchListener(this::handleTouch);
         holdButton.setOnKeyListener(this::handleKey);
         holdButton.setOnFocusChangeListener((view, focused) -> { if (!focused) cancelHold(); });
@@ -149,7 +149,7 @@ public final class VehiclePreviewView {
         boolean anySelected = false;
         for (TemporaryReveal.Area area : AREAS) anySelected |= model.isSelected(area);
         TextView help = label(anySelected
-                ? "선택한 일반 예시는 누르는 동안만 공개됩니다. 사진은 아래 허용 목록을 따릅니다."
+                ? "선택한 예시는 누르는 동안만 공개됩니다. 사진은 허용된 예시의 상세만 잠시 표시합니다."
                 : "선택된 잠시 보기 범위가 없습니다. 사진은 아래 허용 목록을 따릅니다.",
                 15, MUTED, false);
         help.setPadding(0, dp(15), 0, 0);
@@ -164,7 +164,7 @@ public final class VehiclePreviewView {
                 15, MUTED, false);
         right.addView(photoSettings);
         TextView photoHelp = label(photoPolicy.isProtectScreenRequested()
-                ? "기본 화면 보호 요청 중에는 허용한 예시만 표시합니다. 잠시 보기도 허용되지 않은 사진은 표시하지 않습니다."
+                ? "기본 화면 보호 요청 중에는 허용한 예시만 표시합니다. 사진 잠시 보기를 선택하면 허용된 사진의 상세를 확인할 수 있습니다."
                 : "기본 화면 보호 요청이 꺼져 예시 사진을 표시합니다. 허용 목록에 오류가 있으면 가립니다.",
                 15, MUTED, false);
         right.addView(photoHelp);
@@ -247,7 +247,7 @@ public final class VehiclePreviewView {
             photoSymbols[index].setText(visible ? photoSymbol(photo) : "■");
             photoSymbols[index].setBackground(rounded(visible ? photoColor(photo)
                     : Color.rgb(61, 71, 78), DIVIDER));
-            String label = photoPolicy.label(photo);
+            String label = photoPolicy.label(photo, model);
             photoLabels[index].setText(label);
             photoLabels[index].setContentDescription(label);
         }

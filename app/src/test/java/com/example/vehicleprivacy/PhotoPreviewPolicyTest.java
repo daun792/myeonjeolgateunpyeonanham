@@ -51,5 +51,46 @@ public class PhotoPreviewPolicyTest {
         assertFalse(policy.isVisible(SKY));
         assertFalse(policy.isVisible(PET));
         assertFalse(policy.label(PET).contains(PET.getLabel()));
+        TemporaryReveal reveal = new TemporaryReveal(preset(true));
+        assertTrue(reveal.beginHold());
+        assertEquals("사진 가려짐", policy.label(SKY, reveal));
+    }
+
+    @Test public void holdShowsAdditionalDetailsOnlyForApprovedVisiblePhotos() {
+        Preset preset = preset(true);
+        TemporaryReveal reveal = new TemporaryReveal(preset);
+        ExamplePhotoApprovals approvals = new ExamplePhotoApprovals(new MemoryStorage());
+        assertTrue(approvals.setApproved(SKY, true));
+        PhotoPreviewPolicy policy = new PhotoPreviewPolicy(preset, true, approvals);
+        assertEquals("예시 하늘", policy.label(SKY, reveal));
+        assertTrue(reveal.beginHold());
+        assertEquals("예시 하늘 · 잠시 보기: 맑은 하늘 일러스트", policy.label(SKY, reveal));
+        assertEquals("사진 가려짐", policy.label(PET, reveal));
+        assertTrue(approvals.setApproved(SKY, false));
+        assertEquals("사진 가려짐", policy.label(SKY, reveal));
+        assertTrue(approvals.setApproved(SKY, true));
+        reveal.endHold();
+        assertEquals("예시 하늘", policy.label(SKY, reveal));
+    }
+
+    @Test public void unselectedPhotoScopeDoesNotRevealExtraDetails() {
+        Preset preset = preset(true);
+        preset.setBoolean("preview_screen_photo", false);
+        preset.setBoolean("preview_contact_name", true);
+        TemporaryReveal reveal = new TemporaryReveal(preset);
+        ExamplePhotoApprovals approvals = new ExamplePhotoApprovals(new MemoryStorage());
+        assertTrue(approvals.setApproved(SKY, true));
+        PhotoPreviewPolicy policy = new PhotoPreviewPolicy(preset, true, approvals);
+        assertTrue(reveal.beginHold());
+        assertEquals("예시 하늘", policy.label(SKY, reveal));
+    }
+
+    @Test public void unapprovedPhotoNeverGainsDetailsEvenWhenProtectionOff() {
+        Preset preset = preset(true);
+        TemporaryReveal reveal = new TemporaryReveal(preset);
+        ExamplePhotoApprovals approvals = new ExamplePhotoApprovals(new MemoryStorage());
+        PhotoPreviewPolicy policy = new PhotoPreviewPolicy(preset, false, approvals);
+        assertTrue(reveal.beginHold());
+        assertEquals("예시 하늘", policy.label(SKY, reveal));
     }
 }
