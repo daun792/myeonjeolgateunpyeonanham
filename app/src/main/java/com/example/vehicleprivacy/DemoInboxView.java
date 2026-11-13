@@ -1,6 +1,7 @@
 package com.example.vehicleprivacy;
 
 import android.app.Activity;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -8,6 +9,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.Switch;
 import android.widget.TextView;
 
 import java.util.Objects;
@@ -23,13 +25,17 @@ public final class DemoInboxView {
     private final float scale;
     private final Runnable onBack;
     private final DemoInboxScenario scenario = new DemoInboxScenario();
+    private final Preset demoPreset;
+    private boolean simulatedRequest;
+    private String incomingMessage = "";
     private final LinearLayout root;
     private ScrollView scroll;
 
-    public DemoInboxView(Activity activity, float scale, Runnable onBack) {
+    public DemoInboxView(Activity activity, float scale, Preset preset, Runnable onBack) {
         this.activity = Objects.requireNonNull(activity);
         this.scale = scale;
         this.onBack = Objects.requireNonNull(onBack);
+        this.demoPreset = Objects.requireNonNull(preset, "preset").copy();
         root = new LinearLayout(activity) {
             @Override protected void onDetachedFromWindow() {
                 close();
@@ -47,6 +53,8 @@ public final class DemoInboxView {
     /** Reset all simulated state and hide details on background, detach, or navigation. */
     public void close() {
         scenario.reset();
+        simulatedRequest = false;
+        incomingMessage = "";
         render(false);
     }
 
@@ -73,10 +81,50 @@ public final class DemoInboxView {
         body.setPadding(0, dp(15), 0, dp(18));
         scroll.addView(body, new ScrollView.LayoutParams(-1, -2));
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
-        body.addView(label("고정된 예시 알림 3개와 가상 상태만 사용합니다. 실제 보관함, 차량 상태와 보호 적용 상태에는 영향을 주지 않습니다.", 16, MUTED, false));
+        body.addView(label("가상 예시 알림과 상태만 사용합니다. 실제 보관함, 차량 상태와 보호 적용 상태에는 영향을 주지 않습니다.", 16, MUTED, false));
+        body.addView(space(8));
+        body.addView(label("선택한 프리셋: " + demoPreset.getName(), 18, TEXT, true));
+        body.addView(label("프리셋 설정을 변경하면 저장 후 이 화면을 다시 열어 주세요.", 15, MUTED, false));
+        LinearLayout requestRow = row();
+        requestRow.setGravity(Gravity.CENTER_VERTICAL);
+        requestRow.addView(label("가상 보호 요청", 18, TEXT, true), new LinearLayout.LayoutParams(0, -2, 1));
+        Switch request = new Switch(activity);
+        request.setContentDescription("가상 알림 보관용 보호 요청");
+        request.setMinWidth(dp(64));
+        request.setMinHeight(dp(48));
+        request.setChecked(simulatedRequest);
+        request.setTrackTintList(new ColorStateList(new int[][] {new int[] {android.R.attr.state_checked}, new int[] {}},
+                new int[] {ACCENT, Color.rgb(78, 88, 96)}));
+        request.setThumbTintList(ColorStateList.valueOf(Color.WHITE));
+        request.setOnCheckedChangeListener((button, checked) -> {
+            simulatedRequest = checked;
+            incomingMessage = "";
+            scenario.hideDetail();
+            render(true);
+        });
+        requestRow.addView(request);
+        body.addView(requestRow, new LinearLayout.LayoutParams(-1, dp(54)));
+        body.addView(label("가상 보호 요청과 프리셋 알림 보호·보관 설정이 켜진 경우에만 새 예시를 보관합니다.", 15, MUTED, false));
+        TextView incoming = action("새 가상 알림 발생", false);
+        incoming.setContentDescription("새 가상 알림 발생");
+        incoming.setOnClickListener(v -> {
+            DemoInboxScenario.IncomingResult result = scenario.receiveSynthetic(demoPreset, simulatedRequest);
+            switch (result) {
+                case HELD: incomingMessage = "새 가상 알림을 보관했습니다."; break;
+                case FULL: incomingMessage = "가상 추가 알림은 최대 20개입니다."; break;
+                default: incomingMessage = "설정 조건이 맞지 않아 새 가상 알림을 보관하지 않았습니다.";
+            }
+            render(true);
+        });
+        body.addView(incoming, new LinearLayout.LayoutParams(dp(245), dp(52)));
+        if (!incomingMessage.isEmpty()) {
+            TextView result = label(incomingMessage, 16, ACCENT, true);
+            result.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+            body.addView(result);
+        }
         body.addView(space(12));
         body.addView(label("가상 보관 알림 목록", 22, TEXT, true));
-        body.addView(label("항목을 고른 뒤 아래에서 가상 조건을 바꾸어 확인하세요.", 15, MUTED, false));
+        body.addView(label("기본 예시 3개는 미리 보관되어 있습니다. 항목을 고른 뒤 아래에서 가상 조건을 바꾸어 확인하세요.", 15, MUTED, false));
         body.addView(space(8));
         for (int i = 0; i < scenario.count(); i++) addItem(body, i);
         body.addView(space(15));

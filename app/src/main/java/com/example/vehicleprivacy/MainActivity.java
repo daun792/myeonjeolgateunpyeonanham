@@ -297,7 +297,7 @@ public final class MainActivity extends Activity {
         if ("presets".equals(currentScreen)) {
             root.addView(presetList(), new LinearLayout.LayoutParams(0, -1, 1f));
         } else if ("demo_inbox".equals(currentScreen)) {
-            demoInbox = new DemoInboxView(this, scale, () -> navigateTo("notifications"));
+            demoInbox = new DemoInboxView(this, scale, presets.getSelected(), () -> navigateTo("notifications"));
             root.addView(demoInbox.getView(), new LinearLayout.LayoutParams(0, -1, 1f));
         } else if ("passenger_demo".equals(currentScreen)) {
             root.addView(new PassengerPreviewDemoView(this, scale, presets.getSelected(),
